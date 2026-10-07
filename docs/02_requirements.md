@@ -23,8 +23,8 @@
 14.쇼핑몰 바로가기
 
 **3.MoSCoW 우선순위**
-Must-1~5,7,8
-Should-6,9~12
+Must-1\~5,7,8
+Should-6,9\~12
 Could-13,14
 Won't-15
 

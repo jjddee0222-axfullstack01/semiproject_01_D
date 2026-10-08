@@ -40,13 +40,6 @@
 | DELETE | `/reviews/{review_id}/blind` | 블라인드 해제(복구) | 200 / 403 / 404 / 409(블라인드 상태 아님) |
 | GET | `/reviews/{review_id}/blind-logs` | 블라인드·복구 이력 | 200 / 403 |
 
-**US-06 (수정안)**
-
-- 블라인드는 물리 삭제가 아니라 `status = BLINDED`로 바꾸는 소프트 삭제입니다.
-- 처리 시 `blind_reason`, `blinded_by`, `blinded_at`을 기록하고 `REVIEW_BLIND_LOGS`에 이력을 남깁니다.
-- 블라인드된 리뷰는 통계·위험 리뷰·키워드 집계에서 제외하는 것을 권장합니다.
-- 기본 목록은 `VISIBLE`만 보이고, `status=BLINDED`로 조회하면 블라인드한 리뷰를 확인·복구할 수 있습니다.
-
 ## 4. 리뷰 답글 CS (E3, Should)
 
 | 메서드 | 경로 | 설명 | 응답 | US |
@@ -56,11 +49,8 @@
 | PATCH | `/replies/{reply_id}` | 답글 수정 | 200 / 403 | US-08 |
 | DELETE | `/replies/{reply_id}` | 답글 삭제 | 204 / 403 | US-08 |
 
-답글 등록은 해당 리뷰가 달린 상품의 소유자만 가능합니다. 수정·삭제는 작성자 본인만 가능합니다(403).
 
 ## 5. 통계·대시보드 (E5)
-
-모두 `VISIBLE` 리뷰만 집계하고, 공통 필터는 `product_id`, `from`, `to`입니다.
 
 | 메서드 | 경로 | 설명 | 우선순위 | US |  |
 | --- | --- | --- | --- | --- | --- |
@@ -80,8 +70,6 @@
 | POST | `/risk-keywords` | 등록 (word, weight) / 409(중복) |
 | PATCH | `/risk-keywords/{id}` | 수정 |
 | DELETE | `/risk-keywords/{id}` | 삭제 |
-
-변경 후 위험도 재계산은 비동기(백그라운드 태스크)로 처리할 것
 
 ## 7. 내보내기·LLM 기능
 

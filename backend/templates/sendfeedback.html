@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIN POINT REVIEW - 의견 보내기</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+        }
+
+        body {
+            background-color: #F5F5F5;
+            display: flex;
+            height: 100vh;
+            color: #333333;
+        }
+
+        /* 좌측 사이드바 영역 */
+        .sidebar {
+            width: 240px;
+            background-color: #ffffff;
+            border-right: 1px solid #E0E0E0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px 16px;
+        }
+
+        .sidebar-top .logo {
+            font-size: 15px;
+            font-weight: 800;
+            color: #111111;
+            margin-bottom: 24px;
+            padding-left: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background-color: #F8F9FA;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .profile-icon {
+            width: 30px;
+            height: 30px;
+            background-color: #E9ECEF;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+        }
+
+        .profile-info .shop-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .profile-info .user-email {
+            font-size: 10px;
+            color: #666666;
+        }
+
+        .menu-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .menu-item a {
+            display: block;
+            padding: 10px 12px;
+            font-size: 13px;
+            color: #555555;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .menu-item.active a, .menu-item a:hover {
+            background-color: #F1F3F5;
+            color: #111111;
+            font-weight: 600;
+        }
+
+        /* 메인 콘텐츠 영역 */
+        .main-content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .page-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        /* 의견 보내기 폼 컨테이너 (피그마 프레임 형태 재현) */
+        .feedback-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            max-width: 640px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .form-group textarea {
+            width: 100%;
+            height: 100px;
+            padding: 12px 16px;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            resize: none;
+            background-color: #ffffff;
+            color: #333333;
+        }
+
+        .form-group textarea:focus {
+            border-color: #111111;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background-color: #111111;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .submit-btn:hover {
+            background-color: #333333;
+        }
+    </style>
+</head>
+<body>
+
+    {% include '_sidebar.html' %}
+
+    <!-- 메인 콘텐츠 영역 -->
+    <main class="main-content">
+        <h1 class="page-title">의견 보내기</h1>
+        {% include '_flash.html' %}
+
+        <form class="feedback-card" method="post" action="{{ url_for('feedback') }}">
+            <div class="form-group">
+                <label for="complaint">불편 사항</label>
+                <textarea id="complaint" name="complaint" placeholder="불편 사항을 입력해 주세요."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="suggestion">뭐시기 사항</label>
+                <textarea id="suggestion" name="suggestion" placeholder="뭐시기 사항을 입력해 주세요."></textarea>
+            </div>
+
+            <button type="submit" class="submit-btn">의견 보내기</button>
+        </form>
+    </main>
+
+</body>
+</html>

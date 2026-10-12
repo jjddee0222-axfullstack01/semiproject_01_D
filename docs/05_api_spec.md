@@ -5,7 +5,7 @@
 | 항목 | 내용 |
 | --- | --- |
 | Base URL | `/api/v1` |
-| 인증 | `Authorization: Bearer <JWT>` (🔓 표시 외 전부 필요) |
+| 인증 | `세션 쿠키 session_id (HttpOnly, Secure, SameSite=Lax) 자동 전송.` (🔓 표시 외 전부 필요) |
 | 페이지네이션 | `?page=1&size=20` → `{items, page, size, total}` |
 | 기간·상품 필터 | `?product_id=&from=YYYY-MM-DD&to=YYYY-MM-DD` |
 | 오류 | 400/422 입력 오류, 401 미인증, 403 권한 없음, 404 없음, 409 충돌 |
@@ -16,11 +16,11 @@
 | 메서드 | 경로 | 설명 | 응답 | US |
 | --- | --- | --- | --- | --- |
 | POST | `/auth/signup` 🔓 | 회원가입 (email, password, name, mall_name, mall_platform, business_number) | 201 / 409(이메일·사업자번호 중복) / 422 | US-01 |
-| POST | `/auth/login` 🔓 | 로그인, JWT 발급 | 200 / 401 | US-02 |
-| POST | `/auth/logout` | 로그아웃, 토큰 jti를 블랙리스트에 등록 | 204 | US-03 |
+| POST | `/auth/login` 🔓 | 로그인, 세션 생성 후 Set-Cookie: session_id 발급 | 200 / 401 | US-02 |
+| POST | `/auth/logout` | 로그아웃, 세션 행 삭제와 쿠키 만료 | 204 | US-03 |
 | GET | `/users/me` | 내 정보 조회 | 200 |  |
 | PATCH | `/users/me` | 쇼핑몰명·플랫폼 등 수정 | 200 |  |
-| DELETE | `/users/me` | 회원 탈퇴 (body: password 재확인) | 204 / 401 | US-04 |
+| DELETE | `/users/me` | 회원 탈퇴 (body: password 재확인), 해당 사용자의 모든 세션도 함께 삭제 | 204 / 401 | US-04 |
 
 ## 2. 상품 (E2, Must)
 

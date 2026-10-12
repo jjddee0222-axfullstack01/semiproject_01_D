@@ -14,7 +14,7 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 ## 2. 시스템 구성
 
 ```
-[React 대시보드] --REST/JSON, JWT--> [FastAPI]  --SQLAlchemy--> [MariaDB]
+[HTML 대시보드] --REST/JSON, 세션 쿠키--> [FastAPI]  --SQLAlchemy--> [MariaDB]
                                         |
                                         +--> [LLM API]  분석 보조, 사과문 초안
 
@@ -23,7 +23,7 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 
 | 계층 | 기술 | 책임 |
 | --- | --- | --- |
-| 프론트엔드 | React + Vite + TypeScript, ECharts | 로그인, 필터, 차트, 리뷰 목록, 블라인드·답글 모달 |
+| 프론트엔드 | HTML + JavaScript(fetch), ECharts | 로그인, 필터, 차트, 리뷰 목록, 블라인드·답글 모달 |
 | API 서버 | FastAPI, Pydantic v2, SQLAlchemy 2.0, Alembic | 인증·인가, 리뷰·답글·통계 API, 입력 검증 |
 | 데이터베이스 | MariaDB 10.5+ (utf8mb4), 임베딩은 JSON 컬럼 | 12개 테이블 (USERS, PRODUCTS, REVIEWS, REVIEW\_ANALYSIS 등) |
 | 데이터·AI 파이프라인 | pandas, kiwipiepy, 제공된 LLM API | 적재, 정제, 감성·키워드·이슈유형 라벨링 (새 모델은 학습하지 않음) |
@@ -45,20 +45,20 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 | 항목 | 방식 |
 | --- | --- |
 | 인증 | 이메일·비밀번호 로그인 후 JWT 발급. 비밀번호는 argon2 등 단방향 해시 저장 |
-| 로그아웃 | JWT는 서버에서 만료시킬 수 없어 `token_blacklist`에 jti를 저장하고 요청마다 검사 |
+| 로그아웃 | 서버가 세션 행을 삭제하고 쿠키를 만료시켜 즉시 무효화. 만료된 세션은 sessions.expires_at 기준으로 정리 |
 | 인가 | 모든 리소스(상품, 리뷰, 답글, 위험 키워드)를 본인 상품 기준으로만 접근. 위반 시 403 |
 | 답글 수정·삭제 | 작성자 본인만 가능 |
-| 내부 API(`/internal/*`) | 관리자 role이 없으므로 일반 JWT가 아닌 서버 내부 호출 또는 API 키로만 허용 |
+| 내부 API(`/internal/*`) | 관리자 role이 없으므로 일반 로그인 세션이 아닌 서버 내부 호출 또는 API 키로만 허용 |
 
-처리 순서는 요청 → JWT 검증 → 블랙리스트 확인 → 대상 리소스 조회(404) → 소유권 확인(403) → 상태 확인(예: 블라인드 리뷰, 409) → 처리입니다.
+처리 순서는 요청 → 세션 쿠키 확인 → 세션 조회·만료 확인 → 대상 리소스 조회(404) → 소유권 확인(403) → 상태 확인(예: 블라인드 리뷰, 409) → 처리입니다.
 
 ## 5. 주요 데이터 흐름
 
-**수집·분석 (배치):** 데이터셋 다운로드 → 중복·결측 처리와 `ingest_logs` 기록 → `content_raw`(원문)와 `content_clean`(정제본) 분리 저장 → 감성·키워드·이슈유형 분석 결과를 `review_analysis`, `keywords`, `review_keywords`에 저장
+**수집·분석 (배치):** 데이터셋 다운로드 → 중복·결측 처리와 ingest_logs 기록 → content_raw(원문)와 content_clean(정제본) 분리 저장 → 감성·키워드·이슈유형 분석 결과를 review_analysis, keywords, review_keywords에 저장
 
-**대시보드 조회:** 필터(상품, 기간) → 통계 API가 `status = 'VISIBLE'` 리뷰만 집계 → 월별 추이, 긍/부정 비율, 키워드 TOP 10, 위험 리뷰(최신순·심각도순) 응답
+**대시보드 조회:** 필터(상품, 기간) → 통계 API가 status = 'VISIBLE' 리뷰만 집계 → 월별 추이, 긍/부정 비율, 키워드 TOP 10, 위험 리뷰(최신순·심각도순) 응답
 
-**블라인드:** 사유 입력(필수) → 소유권 확인 → `status`, `blind_reason`, `blinded_by`, `blinded_at` 갱신과 이력 기록 → 이후 통계에서 제외
+**블라인드:** 사유 입력(필수) → 소유권 확인 → status, blind_reason, blinded_by, blinded_at 갱신과 이력 기록 → 이후 통계에서 제외
 
 ## 6. 기초 구조 충족 점검
 

@@ -45,7 +45,7 @@
 | 메서드 | 경로 | 설명 | 응답 | US |
 | --- | --- | --- | --- | --- |
 | GET | `/reviews/{review_id}/replies` | 답글 트리 조회 | 200 | US-07 |
-| POST | `/reviews/{review_id}/replies` | 답글 등록 (content, 선택 parent_id) | 201 / 403 | US-07 |
+| POST | `/reviews/{review_id}/replies` | 답글 등록 (content, 선택 parent_id) | 201 / 403 / 409(블라인드된 리뷰) | US-07 |
 | PATCH | `/replies/{reply_id}` | 답글 수정 | 200 / 403 | US-08 |
 | DELETE | `/replies/{reply_id}` | 답글 삭제 | 204 / 403 | US-08 |
 

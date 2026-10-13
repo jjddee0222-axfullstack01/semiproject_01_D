@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIN POINT REVIEW - 상품 조회</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+        }
+
+        body {
+            background-color: #F5F5F5;
+            display: flex;
+            height: 100vh;
+            color: #333333;
+        }
+
+        /* 사이드바 스타일 (피그마 원본 목록 반영) */
+        .sidebar {
+            width: 240px;
+            background-color: #ffffff;
+            border-right: 1px solid #E0E0E0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px 16px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-top {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .logo {
+            font-size: 15px;
+            font-weight: 800;
+            color: #111111;
+            padding-left: 4px;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background-color: #F8F9FA;
+            border-radius: 8px;
+        }
+
+        .profile-icon {
+            width: 28px;
+            height: 28px;
+            background-color: #E9ECEF;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .profile-info .shop-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .profile-info .user-email {
+            font-size: 10px;
+            color: #666666;
+        }
+
+        .menu-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .menu-item a {
+            display: block;
+            padding: 10px 12px;
+            font-size: 13px;
+            color: #555555;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .menu-item.active a, .menu-item a:hover {
+            background-color: #F1F3F5;
+            color: #111111;
+            font-weight: 600;
+        }
+
+        .sidebar-bottom {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            border-top: 1px solid #E9ECEF;
+            padding-top: 16px;
+        }
+
+        /* 메인 콘텐츠 영역 스타일 */
+        .main-content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+        }
+
+        .page-title-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 24px;
+        }
+
+        .page-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .page-guide {
+            font-size: 13px;
+            color: #666666;
+        }
+
+        /* 상품 리스트 카드 그리드 */
+        .product-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .product-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 20px 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .product-card:hover {
+            border-color: #111111;
+            background-color: #FAFAFA;
+        }
+
+        .product-img-box {
+            width: 100px;
+            height: 100px;
+            background-color: #E9ECEF;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #666666;
+            flex-shrink: 0;
+            font-weight: 600;
+        }
+
+        .product-info {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .product-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .product-desc {
+            font-size: 13px;
+            color: #666666;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 사이드바 -->
+    <aside class="sidebar">
+        <div class="sidebar-top">
+            <div class="logo">PIN POINT REVIEW</div>
+            
+            <div class="user-profile">
+                <div class="profile-icon">👤</div>
+                <div class="profile-info">
+                    <div class="shop-name">쇼핑몰 이름</div>
+                    <div class="user-email">닉네임(이름)</div>
+                </div>
+            </div>
+
+            <ul class="menu-list">
+                <li class="menu-item"><a href="#">대시보드</a></li>
+                <li class="menu-item active"><a href="#">상품 조회</a></li>
+                <li class="menu-item"><a href="#">분석</a></li>
+                <li class="menu-item"><a href="#">CS챗봇</a></li>
+            </ul>
+        </div>
+
+        <div class="sidebar-bottom">
+            <ul class="menu-list">
+                <li class="menu-item"><a href="#">설정</a></li>
+                <li class="menu-item"><a href="#">의견 보내기</a></li>
+            </ul>
+        </div>
+    </aside>
+
+    <!-- 메인 상품 조회 화면 -->
+    <main class="main-content">
+        <div class="page-title-area">
+            <h1 class="page-title">상품 조회</h1>
+            <span class="page-guide">상품별 대시보드를 확인하려면 상품을 클릭하세요.</span>
+        </div>
+
+        <div class="product-list">
+            <a href="#" class="product-card">
+                <div class="product-img-box">상품 사진</div>
+                <div class="product-info">
+                    <div class="product-name">[상품명] 프리미엄 시그니처 상품 A</div>
+                    <div class="product-desc">상품 정보 및 평균 별점 / 부정·긍정 리뷰 요약 정보 영역</div>
+                </div>
+            </a>
+
+            <a href="#" class="product-card">
+                <div class="product-img-box">상품 사진</div>
+                <div class="product-info">
+                    <div class="product-name">[상품명] 에센셜 베이직 아이템 B</div>
+                    <div class="product-desc">상품 정보 및 평균 별점 / 부정·긍정 리뷰 요약 정보 영역</div>
+                </div>
+            </a>
+
+            <a href="#" class="product-card">
+                <div class="product-img-box">상품 사진</div>
+                <div class="product-info">
+                    <div class="product-name">[상품명] 컴포트 데일리 상품 C</div>
+                    <div class="product-desc">상품 정보 및 평균 별점 / 부정·긍정 리뷰 요약 정보 영역</div>
+                </div>
+            </a>
+        </div>
+    </main>
+
+</body>
+</html>

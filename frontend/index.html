@@ -31,7 +31,7 @@
         }
 
         .logo {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 800;
             color: #111111;
             margin-bottom: 8px;
@@ -68,10 +68,10 @@
         }
 
         .input-group input:focus {
-            border-color: #000000;
+            border-color: #111111;
         }
 
-        .login-btn {
+        .btn-login {
             width: 100%;
             padding: 14px;
             background-color: #111111;
@@ -81,29 +81,30 @@
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
+            margin-top: 8px;
+            transition: background-color 0.2s;
+        }
+
+        .btn-login:hover {
+            background-color: #333333;
+        }
+
+        .btn-signup {
+            width: 100%;
+            padding: 14px;
+            background-color: #ffffff;
+            color: #111111;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
             margin-top: 10px;
             transition: background-color 0.2s;
         }
 
-        .login-btn:hover {
-            background-color: #333333;
-        }
-
-        .footer-links {
-            margin-top: 24px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 13px;
-            color: #888888;
-        }
-
-        .footer-links a {
-            color: #666666;
-            text-decoration: none;
-        }
-
-        .footer-links a:hover {
-            text-decoration: underline;
+        .btn-signup:hover {
+            background-color: #F8F9FA;
         }
     </style>
 </head>
@@ -115,22 +116,18 @@
         
         <form>
             <div class="input-group">
-                <label for="userid">아이디</label>
-                <input type="text" id="userid" placeholder="아이디를 입력하세요" required>
+                <label for="email">email</label>
+                <input type="email" id="email" placeholder="이메일을 입력하세요" required>
             </div>
-            
-            <div class="input-group">
-                <label for="password">비밀번호</label>
-                <input type="password" id="password" placeholder="비밀번호를 입력하세요" required>
-            </div>
-            
-            <button type="submit" class="login-btn">로그인</button>
-        </form>
 
-        <div class="footer-links">
-            <a href="#">회원가입</a>
-            <a href="#">비밀번호 찾기</a>
-        </div>
+            <div class="input-group">
+                <label for="pw">pw</label>
+                <input type="password" id="pw" placeholder="비밀번호를 입력하세요" required>
+            </div>
+
+            <button type="submit" class="btn-login">로그인</button>
+            <button type="button" class="btn-signup" onclick="location.href='#'">회원가입</button>
+        </form>
     </div>
 
 </body>

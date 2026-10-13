@@ -1,2 +1,5 @@
 #pycache 폴더 제외
-__pycache__/
+backend/__pycache__/
+
+#db 폴더 제외
+backend/instance/pinpoint.db

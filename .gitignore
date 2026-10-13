@@ -3,3 +3,6 @@ backend/__pycache__/
 
 #db 폴더 제외
 backend/instance/pinpoint.db
+
+#venv 폴더 제외
+venv

@@ -4,14 +4,11 @@ backend/__pycache__/
 #db 폴더 제외
 backend/instance/pinpoint.db
 
-<<<<<<< HEAD
 #환경 설정(DB 비밀번호) 제외
 backend/.env
 
 #로컬 DB 파일 폴더 제외
 backend/instance/
-=======
+
 #venv 폴더 제외
 venv
->>>>>>> c68db30af34dab3878ac4eb23ffec9bf71a37e92
-backend/.env.example

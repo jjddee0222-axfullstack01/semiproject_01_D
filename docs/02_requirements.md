@@ -26,7 +26,6 @@
 Must-1\~5,7,8
 Should-6,9\~12
 Could-13,14
-Won't-15
 
 필수 기능은 Must와 Should, 선택 기능은 Could
 

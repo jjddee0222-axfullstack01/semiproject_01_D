@@ -9,13 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 try:
-    from .analysis import DEFAULT_RISK_KEYWORDS, MODEL_VERSION, analyze_review
+    from .analysis import DEFAULT_RISK_KEYWORDS, MODEL_VERSION, analyze_review, clean_text
     from .db import SessionLocal, create_tables
     from .models import (MallPlatform, Product, ProductMonthlyStat, Review, ReviewAnalysis,
                          RiskKeyword, ShopMonthlyStat, User)
     from .security import hash_password
 except ImportError:
-    from analysis import DEFAULT_RISK_KEYWORDS, MODEL_VERSION, analyze_review
+    from analysis import DEFAULT_RISK_KEYWORDS, MODEL_VERSION, analyze_review, clean_text
     from db import SessionLocal, create_tables
     from models import (MallPlatform, Product, ProductMonthlyStat, Review, ReviewAnalysis,
                         RiskKeyword, ShopMonthlyStat, User)
@@ -39,7 +39,9 @@ def seller_risk_keywords(db: Session, seller_id: int) -> list[tuple[str, int]]:
 
 
 def analyze_and_save(db: Session, review: Review, risk_keywords: list[tuple[str, int]]) -> ReviewAnalysis:
-    """리뷰를 분석해 review_analysis 에 저장 (이미 있으면 갱신)"""
+    """리뷰를 분석해 review_analysis 에 저장 (이미 있으면 갱신). 정제본(content_clean)이 없으면 함께 채움"""
+    if not review.content_clean:
+        review.content_clean = clean_text(review.content_raw)
     result = analyze_review(review.content_raw, review.rating, risk_keywords)
     analysis = review.analysis or ReviewAnalysis(review=review, model_version=MODEL_VERSION)
     analysis.sentiment = result.sentiment

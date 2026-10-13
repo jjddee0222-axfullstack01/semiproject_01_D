@@ -7,6 +7,7 @@ ERD의 REVIEW_ANALYSIS 컬럼을 채운다.
 추후 감성 모델·LLM으로 바꿀 때는 analyze_review() 만 교체하고 MODEL_VERSION 을 올리면
 model_version 으로 재분석 대상을 구분할 수 있다 (06_architecture 7장-6).
 """
+import re
 from collections import Counter
 from dataclasses import dataclass
 from typing import Iterable, Optional
@@ -44,6 +45,24 @@ ASPECTS = {
     "가격": (["가성비", "가격", "저렴", "비싸"], IssueType.ETC),
     "재구매·추천": (["재구매", "추천"], IssueType.ETC),
 }
+
+
+# ──────────────────────────────────────────────
+# 텍스트 클리닝 (US-10: 원문 content_raw 는 그대로 두고 정제본 content_clean 에 저장)
+# ──────────────────────────────────────────────
+_URL = re.compile(r"https?://\S+|www\.\S+")
+_HTML = re.compile(r"<[^>]+>")
+_ALLOWED = re.compile(r"[^0-9A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ\s.,!?~%]")     # 한글·영문·숫자·기본 문장부호만 남김
+_REPEAT = re.compile(r"([!?.~ㅋㅎㅠㅜ])\1{2,}")                  # !!!!, ㅋㅋㅋㅋ → 2개로
+_SPACES = re.compile(r"\s+")
+
+
+def clean_text(text: str) -> str:
+    text = _HTML.sub(" ", text or "")
+    text = _URL.sub(" ", text)
+    text = _ALLOWED.sub(" ", text)
+    text = _REPEAT.sub(r"\1\1", text)
+    return _SPACES.sub(" ", text).strip()
 
 
 @dataclass

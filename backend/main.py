@@ -15,15 +15,14 @@ API 문서: http://127.0.0.1:8000/docs
 import os
 import re
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
@@ -31,22 +30,30 @@ from starlette.middleware.sessions import SessionMiddleware
 # backend 폴더 안에서 실행(main:app)하든, 최상위 폴더에서 실행(backend.main:app)하든 동작
 try:
     from .analysis import RISK_SEVERITY, summarize_reviews
+    from .api_v1 import setup_api
+    from .auth import (LoginRequired, clear_cookie, end_all_sessions, end_session,
+                       get_current_user, login_required, start_session)
     from .database import (add_default_risk_keywords, analyze_and_save, init_db,
                            seller_risk_keywords, this_month)
     from .db import describe_db, get_session
     from .models import (Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                         ReviewAnalysis, ReviewStatus, ShopMonthlyStat, User, UserSession,
+                         ReviewAnalysis, ReviewStatus, ShopMonthlyStat, User,
                          UserStatus, visible_reviews)
-    from .security import hash_password, hash_session_token, new_session_token, verify_password
+    from .schemas import ReviewCreate, ReviewCreateResult
+    from .security import hash_password, verify_password
 except ImportError:
     from analysis import RISK_SEVERITY, summarize_reviews
+    from api_v1 import setup_api
+    from auth import (LoginRequired, clear_cookie, end_all_sessions, end_session,
+                      get_current_user, login_required, start_session)
     from database import (add_default_risk_keywords, analyze_and_save, init_db,
                           seller_risk_keywords, this_month)
     from db import describe_db, get_session
     from models import (Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                        ReviewAnalysis, ReviewStatus, ShopMonthlyStat, User, UserSession,
+                        ReviewAnalysis, ReviewStatus, ShopMonthlyStat, User,
                         UserStatus, visible_reviews)
-    from security import hash_password, hash_session_token, new_session_token, verify_password
+    from schemas import ReviewCreate, ReviewCreateResult
+    from security import hash_password, verify_password
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -66,12 +73,6 @@ app.add_middleware(SessionMiddleware, session_cookie="pp_flash",
                    secret_key=os.environ.get("SECRET_KEY", "dev-secret-change-me"))
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-
-# ── 세션 쿠키 설정 (05_api_spec: session_id, HttpOnly, Secure, SameSite=Lax)
-SESSION_COOKIE = "session_id"
-SESSION_TTL = timedelta(days=7)
-# 개발(http://127.0.0.1)에서는 Secure 쿠키가 전송되지 않을 수 있어 기본값 False, 운영(HTTPS)에서 1로 설정
-COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
 
 # ── 입력 규칙
 PASSWORD_RULE = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$")
@@ -138,58 +139,12 @@ def redirect(request: Request, route_name: str, **path_params) -> RedirectRespon
 
 
 # ──────────────────────────────────────────────
-# 인증: sessions 테이블 + session_id 쿠키
-#   요청 → 쿠키 확인 → 세션 조회·만료 확인 → (리소스 404 → 소유권 403) → 처리  (06_architecture 4장)
+# 인증: sessions 테이블 + session_id 쿠키 (auth.py, /api/v1 과 공용)
 # ──────────────────────────────────────────────
-class LoginRequired(Exception):
-    """로그인하지 않은 사용자가 보호된 화면/API에 접근"""
-
-
-def get_current_user(request: Request, db: Session = Depends(get_session)) -> Optional[User]:
-    user = None
-    token = request.cookies.get(SESSION_COOKIE)
-    if token:
-        user = db.scalar(
-            select(User)
-            .join(UserSession, UserSession.user_id == User.id)
-            .where(UserSession.session_token_hash == hash_session_token(token),
-                   UserSession.expires_at > datetime.now(),
-                   User.status == UserStatus.ACTIVE)
-        )
-    request.state.user = user
-    return user
-
-
-def login_required(user: Optional[User] = Depends(get_current_user)) -> User:
-    if user is None:
-        raise LoginRequired()
-    return user
-
-
-def start_session(db: Session, user: User, response: RedirectResponse) -> None:
-    """로그인: 세션 행 생성 + 쿠키 발급 (만료된 세션은 이때 정리)"""
-    db.execute(delete(UserSession).where(UserSession.expires_at <= datetime.now()))
-    token = new_session_token()
-    db.add(UserSession(user_id=user.id, session_token_hash=hash_session_token(token),
-                       expires_at=datetime.now() + SESSION_TTL))
-    db.commit()
-    response.set_cookie(SESSION_COOKIE, token, max_age=int(SESSION_TTL.total_seconds()),
-                        httponly=True, secure=COOKIE_SECURE, samesite="lax")
-
-
-def end_session(db: Session, request: Request, response: RedirectResponse) -> None:
-    """로그아웃: 서버에서 세션 행 삭제 + 쿠키 만료 → 기존 쿠키로 접근 불가"""
-    token = request.cookies.get(SESSION_COOKIE)
-    if token:
-        db.execute(delete(UserSession).where(UserSession.session_token_hash == hash_session_token(token)))
-        db.commit()
-    response.delete_cookie(SESSION_COOKIE, httponly=True, secure=COOKIE_SECURE, samesite="lax")
-
-
 @app.exception_handler(LoginRequired)
 async def login_required_handler(request: Request, _exc: LoginRequired):
     if request.url.path.startswith("/api/"):
-        return JSONResponse({"detail": "로그인이 필요합니다."}, status_code=401)
+        return JSONResponse({"code": "UNAUTHORIZED", "message": "로그인이 필요합니다."}, status_code=401)
     flash(request, "로그인이 필요합니다.", "error")
     return redirect(request, "login")
 
@@ -373,24 +328,8 @@ def product_dashboard(request: Request,
 # ──────────────────────────────────────────────
 # 리뷰 등록 API (데이터 적재/테스트용) — 등록 시 자동 분석
 # ──────────────────────────────────────────────
-class ReviewIn(BaseModel):
-    product_id: int
-    content: str = Field(min_length=1, max_length=5000)
-    rating: int = Field(ge=1, le=5)
-    reviewer_name: Optional[str] = Field(default=None, max_length=50)
-    reviewed_at: Optional[date] = None
-
-
-class ReviewOut(BaseModel):
-    id: int
-    sentiment: str
-    severity: int
-    issue_type: Optional[str]
-    is_risky: bool
-
-
-@app.post("/api/reviews", status_code=201, response_model=ReviewOut)
-def add_review(body: ReviewIn,
+@app.post("/api/reviews", status_code=201, response_model=ReviewCreateResult)
+def add_review(body: ReviewCreate,
                user: User = Depends(login_required),
                db: Session = Depends(get_session)):
     product = db.get(Product, body.product_id)
@@ -404,9 +343,8 @@ def add_review(body: ReviewIn,
     db.add(review)
     analysis = analyze_and_save(db, review, seller_risk_keywords(db, user.id))
     db.commit()
-    return ReviewOut(id=review.id, sentiment=analysis.sentiment.value, severity=analysis.severity,
-                     issue_type=analysis.issue_type.value if analysis.issue_type else None,
-                     is_risky=analysis.severity >= RISK_SEVERITY)
+    return ReviewCreateResult(id=review.id, sentiment=analysis.sentiment, severity=analysis.severity,
+                              issue_type=analysis.issue_type, is_risky=analysis.severity >= RISK_SEVERITY)
 
 
 # ──────────────────────────────────────────────
@@ -468,11 +406,11 @@ def withdraw(request: Request,
 
     user.status = UserStatus.WITHDRAWN
     user.withdrawn_at = datetime.now()
-    db.execute(delete(UserSession).where(UserSession.user_id == user.id))
+    end_all_sessions(db, user)
     db.commit()
 
     response = redirect(request, "login")
-    response.delete_cookie(SESSION_COOKIE, httponly=True, secure=COOKIE_SECURE, samesite="lax")
+    clear_cookie(response)
     flash(request, "회원 탈퇴가 완료되었습니다.")
     return response
 
@@ -504,13 +442,21 @@ def feedback(request: Request,
 
 
 # ──────────────────────────────────────────────
+# REST API v1 (/api/v1/*, 문서: /docs) — api_v1.py  (화면 라우트 뒤에 등록)
+# ──────────────────────────────────────────────
+setup_api(app)
+
+
+# ──────────────────────────────────────────────
 # 404  (404page.html)
 # ──────────────────────────────────────────────
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404 and not request.url.path.startswith("/api/"):
         return render(request, "404page.html", status_code=404)
-    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    # API 오류는 공통 형식 {code, message}
+    return JSONResponse({"code": f"HTTP_{exc.status_code}", "message": str(exc.detail)},
+                        status_code=exc.status_code)
 
 
 if __name__ == "__main__":

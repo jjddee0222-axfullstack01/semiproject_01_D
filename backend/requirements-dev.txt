@@ -1,0 +1,4 @@
+# 테스트용 패키지 (서버 실행에는 필요 없음)
+-r requirements.txt
+pytest>=8.0
+httpx>=0.27          # FastAPI TestClient 가 사용

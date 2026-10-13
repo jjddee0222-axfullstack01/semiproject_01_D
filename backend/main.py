@@ -1,9 +1,10 @@
 """
 PIN POINT REVIEW - FastAPI 백엔드
 
-실행:
-    pip install -r requirements.txt
-    uvicorn main:app --reload
+실행 (아래 중 아무거나):
+    cd backend  →  uvicorn main:app --reload        # backend 폴더 안에서
+    uvicorn backend.main:app --reload               # 프로젝트 최상위 폴더에서
+    python backend/main.py   (또는 VS Code ▶ 실행)  # 어느 폴더에서든
     → http://127.0.0.1:8000        (데모 계정: pinpoint_user / Pinpoint1!)
     → http://127.0.0.1:8000/docs   (API 문서 자동 생성)
 """
@@ -22,7 +23,14 @@ from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from database import get_db, hash_password, init_db, is_risky_review, verify_password
+# backend 폴더 안에서 실행(main:app)하든, 최상위 폴더에서 실행(backend.main:app)하든
+# database 모듈을 찾을 수 있도록 두 방식을 모두 지원
+try:
+    from .analysis import is_risky_review, summarize_reviews
+    from .database import get_db, hash_password, init_db, verify_password
+except ImportError:
+    from analysis import is_risky_review, summarize_reviews
+    from database import get_db, hash_password, init_db, verify_password
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -224,7 +232,7 @@ def dashboard(request: Request,
 
     recent_reviews = db.execute(
         "SELECT r.* FROM reviews r JOIN products p ON p.id = r.product_id "
-        "WHERE p.user_id = ? ORDER BY r.created_at DESC LIMIT 4",
+        "WHERE p.user_id = ? ORDER BY r.created_at DESC LIMIT 3",
         (user["id"],),
     ).fetchall()
 
@@ -239,43 +247,63 @@ def dashboard(request: Request,
 
 
 # ──────────────────────────────────────────────
-# 상품별 리뷰  (goodsreview.html)
+# 상품 조회 / 상품별 대시보드  (products.html, productdashboard.html)
 # ──────────────────────────────────────────────
-def _render_product_reviews(request: Request, db: sqlite3.Connection, product):
-    reviews, avg_rating = [], 0.0
-    if product:
-        reviews = db.execute(
-            "SELECT * FROM reviews WHERE product_id = ? ORDER BY created_at DESC",
-            (product["id"],),
-        ).fetchall()
-        if reviews:
-            avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
-    return render(request, "goodsreview.html", active_menu="reviews",
-                  product=product, reviews=reviews, avg_rating=avg_rating)
+@app.get("/products", name="products", response_class=HTMLResponse)
+def products(request: Request,
+             user=Depends(login_required),
+             db: sqlite3.Connection = Depends(get_db)):
+    """상품 목록 — 상품별 평균 별점 / 리뷰 수 / 긍정·부정·위험 리뷰 수"""
+    rows = db.execute(
+        """
+        SELECT p.*,
+               COUNT(r.id)                                              AS review_count,
+               COALESCE(AVG(r.rating), 0)                               AS avg_rating,
+               COALESCE(SUM(r.rating >= 4 AND r.is_risky = 0), 0)       AS positive_count,
+               COALESCE(SUM(r.rating <= 3 OR r.is_risky = 1), 0)        AS negative_count,
+               COALESCE(SUM(r.is_risky), 0)                             AS risky_count
+        FROM products p
+        LEFT JOIN reviews r ON r.product_id = p.id
+        WHERE p.user_id = ?
+        GROUP BY p.id
+        ORDER BY p.id
+        """,
+        (user["id"],),
+    ).fetchall()
+    return render(request, "products.html", active_menu="products", products=rows)
 
 
-@app.get("/reviews", name="product_reviews", response_class=HTMLResponse)
-def product_reviews(request: Request,
-                    user=Depends(login_required),
-                    db: sqlite3.Connection = Depends(get_db)):
-    """첫 번째 상품의 리뷰 화면"""
-    product = db.execute(
-        "SELECT * FROM products WHERE user_id = ? ORDER BY id LIMIT 1", (user["id"],)
-    ).fetchone()
-    return _render_product_reviews(request, db, product)
-
-
-@app.get("/reviews/{product_id}", name="product_reviews_detail", response_class=HTMLResponse)
-def product_reviews_detail(request: Request,
-                           product_id: int,
-                           user=Depends(login_required),
-                           db: sqlite3.Connection = Depends(get_db)):
+@app.get("/products/{product_id}", name="product_dashboard", response_class=HTMLResponse)
+def product_dashboard(request: Request,
+                      product_id: int,
+                      user=Depends(login_required),
+                      db: sqlite3.Connection = Depends(get_db)):
+    """상품별 대시보드 — 상품 정보 / 위험 리뷰 / 상세 리뷰 / 구매자 수 / 평균 평점 / 긍정·부정 요약"""
     product = db.execute(
         "SELECT * FROM products WHERE id = ? AND user_id = ?", (product_id, user["id"])
     ).fetchone()
     if product is None:
         raise HTTPException(status_code=404)
-    return _render_product_reviews(request, db, product)
+
+    reviews = db.execute(
+        "SELECT * FROM reviews WHERE product_id = ? ORDER BY created_at DESC", (product_id,)
+    ).fetchall()
+    avg_rating = sum(r["rating"] for r in reviews) / len(reviews) if reviews else 0.0
+    risky_count = sum(1 for r in reviews if r["is_risky"])
+
+    month = datetime.now().strftime("%Y-%m")
+    stat = db.execute(
+        "SELECT buyers FROM product_stats WHERE product_id = ? AND month = ?", (product_id, month)
+    ).fetchone()
+
+    # DB에 저장된 요약(예: AI 요약 결과)이 있으면 그것을, 없으면 규칙 기반 자동 요약을 사용
+    auto_positive, auto_negative = summarize_reviews(reviews)
+
+    return render(request, "productdashboard.html", active_menu="products",
+                  product=product, reviews=reviews, risky_count=risky_count,
+                  avg_rating=avg_rating, monthly_buyers=stat["buyers"] if stat else 0,
+                  positive_summary=product["positive_summary"] or auto_positive,
+                  negative_summary=product["negative_summary"] or auto_negative)
 
 
 class ReviewIn(BaseModel):
@@ -377,9 +405,10 @@ def feedback(request: Request,
              user=Depends(login_required),
              db: sqlite3.Connection = Depends(get_db)):
     complaint, suggestion = complaint.strip(), suggestion.strip()
-    if not complaint and not suggestion:
-        flash(request, "내용을 하나 이상 입력해 주세요.", "error")
-        return render(request, "sendfeedback.html", status_code=400, active_menu="feedback")
+    if not complaint or not suggestion:
+        flash(request, "불편 사항과 뭐시기 사항을 모두 입력해 주세요.", "error")
+        return render(request, "sendfeedback.html", status_code=400, active_menu="feedback",
+                      form={"complaint": complaint, "suggestion": suggestion})
 
     db.execute("INSERT INTO feedback (user_id, complaint, suggestion) VALUES (?, ?, ?)",
                (user["id"], complaint, suggestion))
@@ -400,4 +429,5 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", reload=True)
+    # app_dir 을 backend 폴더로 지정 → 현재 위치와 상관없이 main 모듈을 찾음
+    uvicorn.run("main:app", app_dir=str(BASE_DIR), reload=True, reload_dirs=[str(BASE_DIR)])

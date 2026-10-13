@@ -19,7 +19,7 @@
             color: #333333;
         }
 
-        /* 사이드바 스타일 */
+        /* 피그마 원본 사이드바 레이아웃 */
         .sidebar {
             width: 240px;
             background-color: #ffffff;
@@ -28,46 +28,52 @@
             flex-direction: column;
             justify-content: space-between;
             padding: 24px 16px;
+            flex-shrink: 0;
         }
 
-        .sidebar-top .logo {
-            font-size: 16px;
+        .sidebar-top {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .logo {
+            font-size: 15px;
             font-weight: 800;
             color: #111111;
-            margin-bottom: 32px;
-            padding-left: 8px;
+            padding-left: 4px;
             letter-spacing: -0.5px;
+            margin-bottom: 8px;
         }
 
         .user-profile {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 12px;
+            padding: 10px 12px;
             background-color: #F8F9FA;
             border-radius: 8px;
-            margin-bottom: 24px;
         }
 
         .profile-icon {
-            width: 32px;
-            height: 32px;
+            width: 28px;
+            height: 28px;
             background-color: #E9ECEF;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
+            font-size: 12px;
         }
 
         .profile-info .shop-name {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
             color: #111111;
         }
 
         .profile-info .user-email {
-            font-size: 11px;
+            font-size: 10px;
             color: #666666;
         }
 
@@ -76,12 +82,13 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
+            margin-top: 8px;
         }
 
         .menu-item a {
             display: block;
             padding: 10px 12px;
-            font-size: 14px;
+            font-size: 13px;
             color: #555555;
             text-decoration: none;
             border-radius: 6px;
@@ -97,10 +104,12 @@
         .sidebar-bottom {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 4px;
+            border-top: 1px solid #E9ECEF;
+            padding-top: 16px;
         }
 
-        /* 메인 콘텐츠 영역 스타일 */
+        /* 메인 콘텐츠 영역 */
         .main-content {
             flex: 1;
             padding: 40px;
@@ -108,7 +117,7 @@
         }
 
         .page-title {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
             margin-bottom: 24px;
             color: #111111;
@@ -120,7 +129,7 @@
             border-radius: 12px;
             padding: 32px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-            max-width: 600px;
+            max-width: 640px;
         }
 
         .form-group {
@@ -130,8 +139,8 @@
         .form-group label {
             display: block;
             font-size: 13px;
-            font-weight: 600;
-            color: #333333;
+            font-weight: 700;
+            color: #111111;
             margin-bottom: 8px;
         }
 
@@ -156,40 +165,37 @@
             color: #888888;
         }
 
-        .btn-container {
+        .form-actions {
             display: flex;
-            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
             margin-top: 32px;
         }
 
-        .btn {
-            flex: 1;
-            padding: 14px;
-            border-radius: 8px;
-            font-size: 15px;
+        .btn-withdraw {
+            background: none;
+            border: none;
+            color: #FA5252;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .btn-save {
+            padding: 12px 24px;
+            background-color: #111111;
+            color: #ffffff;
             border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
             transition: background-color 0.2s;
         }
 
-        .btn-primary {
-            background-color: #111111;
-            color: #ffffff;
-        }
-
-        .btn-primary:hover {
+        .btn-save:hover {
             background-color: #333333;
-        }
-
-        .btn-danger {
-            background-color: #FFF5F5;
-            color: #FA5252;
-            border: 1px solid #FFE3E3;
-        }
-
-        .btn-danger:hover {
-            background-color: #FFE3E3;
         }
     </style>
 </head>
@@ -229,9 +235,9 @@
                     <input type="text" id="business-num" name="business_num" value="{{ current_user.business_num }}" required>
                 </div>
 
-                <div class="btn-container">
-                    <button type="submit" class="btn btn-danger" form="withdraw-form">회원 탈퇴</button>
-                    <button type="submit" class="btn btn-primary">저장하기</button>
+                <div class="form-actions">
+                    <button type="submit" class="btn-withdraw" form="withdraw-form">회원 탈퇴</button>
+                    <button type="submit" class="btn-save">저장하기</button>
                 </div>
             </form>
             <form id="withdraw-form" method="post" action="{{ url_for('withdraw') }}"

@@ -211,13 +211,13 @@
         <div class="card">
             <form method="post" action="{{ url_for('settings') }}">
                 <div class="form-group">
-                    <label for="userid">아이디</label>
-                    <input type="text" id="userid" value="{{ current_user.userid }}" disabled>
+                    <label for="email">이메일</label>
+                    <input type="email" id="email" value="{{ current_user.email }}" disabled>
                 </div>
 
                 <div class="form-group">
                     <label for="current-pwd">현재 비밀번호</label>
-                    <input type="password" id="current-pwd" name="current_password" placeholder="현재 비밀번호를 입력하세요" required>
+                    <input type="password" id="current-pwd" name="current_password" placeholder="현재 비밀번호를 입력하세요 (저장·탈퇴 시 필요)" required>
                 </div>
 
                 <div class="form-group">
@@ -226,22 +226,31 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="shop-name">쇼핑몰 이름</label>
-                    <input type="text" id="shop-name" name="shop_name" value="{{ current_user.shop_name }}" required>
+                    <label for="mall-name">쇼핑몰 이름</label>
+                    <input type="text" id="mall-name" name="mall_name" value="{{ current_user.mall_name }}" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="business-num">사업자번호</label>
-                    <input type="text" id="business-num" name="business_num" value="{{ current_user.business_num }}" required>
+                    <label for="mall-platform">쇼핑몰 플랫폼</label>
+                    <select id="mall-platform" name="mall_platform" required style="width:100%;padding:12px 16px;border:1px solid #E0E0E0;border-radius:8px;font-size:14px;background:#ffffff;color:#333333;outline:none;">
+                    <option value="NAVER" {{ 'selected' if current_user.mall_platform.value == 'NAVER' }}>네이버 스마트스토어</option>
+                    <option value="COUPANG" {{ 'selected' if current_user.mall_platform.value == 'COUPANG' }}>쿠팡</option>
+                    <option value="OWN" {{ 'selected' if current_user.mall_platform.value == 'OWN' }}>자사몰</option>
+                    <option value="ETC" {{ 'selected' if current_user.mall_platform.value == 'ETC' }}>기타</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="business-number">사업자번호</label>
+                    <input type="text" id="business-number" name="business_number" value="{{ current_user.business_number|bizno }}" inputmode="numeric" required>
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn-withdraw" form="withdraw-form">회원 탈퇴</button>
+                    <button type="submit" class="btn-withdraw" formaction="{{ url_for('withdraw') }}"
+                            onclick="if(!document.getElementById('current-pwd').value){alert('탈퇴하려면 현재 비밀번호를 입력해 주세요.');return false;} return confirm('정말 탈퇴하시겠습니까?');">회원 탈퇴</button>
                     <button type="submit" class="btn-save">저장하기</button>
                 </div>
             </form>
-            <form id="withdraw-form" method="post" action="{{ url_for('withdraw') }}"
-                  onsubmit="return confirm('정말 탈퇴하시겠습니까? 모든 정보가 삭제됩니다.');"></form>
         </div>
     </main>
 

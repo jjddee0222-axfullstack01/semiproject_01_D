@@ -200,7 +200,7 @@
 
     <!-- 메인 대시보드 화면 -->
     <main class="main-content">
-        <h1 class="page-title">{{ current_user.shop_name }} 대시보드</h1>
+        <h1 class="page-title">{{ current_user.mall_name }} 대시보드</h1>
         {% include '_flash.html' %}
 
         <div class="dashboard-grid">
@@ -221,7 +221,7 @@
                     <div class="card-title">최근 등록된 리뷰</div>
                     <div class="review-list">
                         {% for review in recent_reviews %}
-                        <div class="review-item">{{ review.content }}</div>
+                        <div class="review-item">{{ review.content_raw }}</div>
                         {% else %}
                         <div class="review-item">등록된 리뷰가 없습니다.</div>
                         {% endfor %}

@@ -121,8 +121,8 @@
             </div>
 
             <div class="input-group">
-                <label for="userid">아이디</label>
-                <input type="text" id="userid" name="userid" value="{{ form.userid or '' }}" placeholder="아이디를 입력해주세요." required>
+                <label for="email">이메일</label>
+                <input type="email" id="email" name="email" value="{{ form.email or '' }}" placeholder="이메일을 입력해주세요." autocomplete="username" required>
             </div>
             
             <div class="input-group">
@@ -136,13 +136,24 @@
             </div>
 
             <div class="input-group">
-                <label for="shop-name">쇼핑몰 이름</label>
-                <input type="text" id="shop-name" name="shop_name" value="{{ form.shop_name or '' }}" placeholder="쇼핑몰 이름을 입력해주세요." required>
+                <label for="mall-name">쇼핑몰 이름</label>
+                <input type="text" id="mall-name" name="mall_name" value="{{ form.mall_name or '' }}" placeholder="쇼핑몰 이름을 입력해주세요." required>
             </div>
 
             <div class="input-group">
-                <label for="business-num">사업자 등록 번호</label>
-                <input type="text" id="business-num" name="business_num" value="{{ form.business_num or '' }}" placeholder="사업자 등록 번호를 입력해주세요." required>
+                <label for="mall-platform">쇼핑몰 플랫폼</label>
+                <select id="mall-platform" name="mall_platform" required style="width:100%;padding:12px 16px;border:1px solid #E0E0E0;border-radius:8px;font-size:14px;background:#ffffff;color:#333333;outline:none;">
+                    <option value="" disabled {{ 'selected' if not form.mall_platform }}>플랫폼을 선택해주세요.</option>
+                    <option value="NAVER" {{ 'selected' if form.mall_platform == 'NAVER' }}>네이버 스마트스토어</option>
+                    <option value="COUPANG" {{ 'selected' if form.mall_platform == 'COUPANG' }}>쿠팡</option>
+                    <option value="OWN" {{ 'selected' if form.mall_platform == 'OWN' }}>자사몰</option>
+                    <option value="ETC" {{ 'selected' if form.mall_platform == 'ETC' }}>기타</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label for="business-number">사업자 등록 번호</label>
+                <input type="text" id="business-number" name="business_number" value="{{ form.business_number or '' }}" placeholder="숫자 10자리 (하이픈 입력 가능)" inputmode="numeric" required>
             </div>
             
             <button type="submit" class="signup-btn">회원가입</button>

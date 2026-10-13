@@ -352,10 +352,10 @@
                 <div>
                     <div class="card">
                         <div class="product-header-card">
-                            <div class="product-header-img">{% if product.image_url %}<img src="{{ product.image_url }}" alt="{{ product.name }}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">{% else %}상품 사진{% endif %}</div>
+                            <div class="product-header-img">상품 사진</div>
                             <div class="product-info">
                                 <div class="product-name">{{ product.name }}</div>
-                                <div class="product-desc">{{ product.category }} / {{ product.description }}</div>
+                                <div class="product-desc">{{ product.category or "" }}{% if product.description %} / {{ product.description }}{% endif %}</div>
                             </div>
                         </div>
                     </div>
@@ -375,12 +375,13 @@
                         <div class="card-title">상세 리뷰</div>
                         <div class="review-list">
                             {% for review in reviews %}
-                            <div class="review-item"{% if review.is_risky %} style="border-left:3px solid #FA5252;"{% endif %}>
+                            {% set risky = review.analysis and review.analysis.severity >= RISK_SEVERITY %}
+                            <div class="review-item"{% if risky %} style="border-left:3px solid #FA5252;"{% endif %}>
                                 <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px;color:#888888;">
-                                    <span>{{ review.author|mask_name }} 고객님 · ★ {{ review.rating }}{% if review.is_risky %} <b style="color:#FA5252;">위험</b>{% endif %}</span>
-                                    <span>{{ review.created_at|dotdate }}</span>
+                                    <span>{{ (review.reviewer_name or "익명")|mask_name }} 고객님 · ★ {{ review.rating }}{% if risky %} <b style="color:#FA5252;">위험</b>{% endif %}</span>
+                                    <span>{{ review.reviewed_at|dotdate }}</span>
                                 </div>
-                                "{{ review.content }}"
+                                "{{ review.content_raw }}"
                             </div>
                             {% else %}
                             <div class="review-item">아직 등록된 리뷰가 없습니다.</div>

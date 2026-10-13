@@ -116,8 +116,8 @@
         {% include '_flash.html' %}
         <form method="post" action="{{ url_for('login') }}">
             <div class="input-group">
-                <label for="userid">아이디</label>
-                <input type="text" id="userid" name="userid" value="{{ form.userid or '' }}" placeholder="아이디를 입력하세요" required>
+                <label for="email">이메일</label>
+                <input type="email" id="email" name="email" value="{{ form.email or '' }}" placeholder="이메일을 입력하세요" autocomplete="username" required>
             </div>
             
             <div class="input-group">

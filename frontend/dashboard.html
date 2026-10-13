@@ -19,7 +19,7 @@
             color: #333333;
         }
 
-        /* 사이드바 스타일 */
+        /* 피그마 원본 사이드바 레이아웃 */
         .sidebar {
             width: 240px;
             background-color: #ffffff;
@@ -31,13 +31,19 @@
             flex-shrink: 0;
         }
 
-        .sidebar-top .logo {
+        .sidebar-top {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .logo {
             font-size: 15px;
             font-weight: 800;
             color: #111111;
-            margin-bottom: 24px;
-            padding-left: 8px;
+            padding-left: 4px;
             letter-spacing: -0.5px;
+            margin-bottom: 8px;
         }
 
         .user-profile {
@@ -47,18 +53,17 @@
             padding: 10px 12px;
             background-color: #F8F9FA;
             border-radius: 8px;
-            margin-bottom: 20px;
         }
 
         .profile-icon {
-            width: 30px;
-            height: 30px;
+            width: 28px;
+            height: 28px;
             background-color: #E9ECEF;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px;
+            font-size: 12px;
         }
 
         .profile-info .shop-name {
@@ -77,6 +82,7 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
+            margin-top: 8px;
         }
 
         .menu-item a {
@@ -99,9 +105,11 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
+            border-top: 1px solid #E9ECEF;
+            padding-top: 16px;
         }
 
-        /* 메인 콘텐츠 영역 스타일 */
+        /* 메인 콘텐츠 영역 */
         .main-content {
             flex: 1;
             padding: 40px;
@@ -115,7 +123,6 @@
             color: #111111;
         }
 
-        /* 2단 대시보드 레이아웃 그리드 */
         .dashboard-grid {
             display: grid;
             grid-template-columns: 2fr 1fr;
@@ -137,7 +144,6 @@
             color: #111111;
         }
 
-        /* 위험 리뷰 박스 */
         .alert-box {
             background-color: #FFF5F5;
             border: 1px solid #FFE3E3;
@@ -148,7 +154,6 @@
             font-weight: 600;
         }
 
-        /* 최근 등록된 리뷰 박스들 */
         .review-list {
             display: flex;
             flex-direction: column;
@@ -163,7 +168,6 @@
             color: #444444;
         }
 
-        /* 쇼핑몰 간단 분석 스타일 (오른쪽 칸) */
         .analytics-card {
             display: flex;
             flex-direction: column;
@@ -192,7 +196,7 @@
 </head>
 <body>
 
-    <!-- 사이드바 -->
+    <!-- 사이드바 (피그마 원본 메뉴 전체 반영) -->
     <aside class="sidebar">
         <div class="sidebar-top">
             <div class="logo">PIN POINT REVIEW</div>
@@ -207,9 +211,7 @@
 
             <ul class="menu-list">
                 <li class="menu-item active"><a href="#">대시보드</a></li>
-                <li class="menu-item"><a href="#">상품별 대시보드</a></li>
-                <li class="menu-item"><a href="#">상품목록</a></li>
-                <li class="menu-item"><a href="#">상품별 리뷰</a></li>
+                <li class="menu-item"><a href="#">상품 조회</a></li>
                 <li class="menu-item"><a href="#">분석</a></li>
                 <li class="menu-item"><a href="#">CS챗봇</a></li>
             </ul>
@@ -225,10 +227,10 @@
 
     <!-- 메인 대시보드 화면 -->
     <main class="main-content">
-        <h1 class="page-title">(쇼핑몰이름) 대시보드</h1>
+        <h1 class="page-title">[쇼핑몰이름] 대시보드</h1>
 
         <div class="dashboard-grid">
-            <!-- 왼쪽 영역: 위험 리뷰 감지 및 최근 등록된 리뷰 -->
+            <!-- 왼쪽 영역 -->
             <div>
                 <div class="card">
                     <div class="card-title">위험 리뷰</div>
@@ -243,12 +245,11 @@
                         <div class="review-item">배송도 빠르고 상품 상태가 너무 마음에 듭니다! 파손 없이 잘 왔어요.</div>
                         <div class="review-item">생각했던 것보다 조금 아쉽네요. 마감 처리가 살짝 헐거워요.</div>
                         <div class="review-item">가성비 최고입니다. 주변에도 추천했어요! 재구매 의사 있습니다.</div>
-                        <div class="review-item">포장이 꼼꼼하게 잘 되어 있어서 안전하게 잘 받았습니다. 감사합니다.</div>
                     </div>
                 </div>
             </div>
 
-            <!-- 오른쪽 영역: 쇼핑몰 간단 분석 (방문자 수 / 구매자 수) -->
+            <!-- 오른쪽 영역 -->
             <div>
                 <div class="card analytics-card">
                     <div class="card-title">쇼핑몰 간단 분석</div>

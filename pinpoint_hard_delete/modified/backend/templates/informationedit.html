@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIN POINT REVIEW - 회원정보 수정</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+        }
+
+        body {
+            background-color: #F5F5F5;
+            display: flex;
+            height: 100vh;
+            color: #333333;
+        }
+
+        /* 피그마 원본 사이드바 레이아웃 */
+        .sidebar {
+            width: 240px;
+            background-color: #ffffff;
+            border-right: 1px solid #E0E0E0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px 16px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-top {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .logo {
+            font-size: 15px;
+            font-weight: 800;
+            color: #111111;
+            padding-left: 4px;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background-color: #F8F9FA;
+            border-radius: 8px;
+        }
+
+        .profile-icon {
+            width: 28px;
+            height: 28px;
+            background-color: #E9ECEF;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .profile-info .shop-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .profile-info .user-email {
+            font-size: 10px;
+            color: #666666;
+        }
+
+        .menu-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .menu-item a {
+            display: block;
+            padding: 10px 12px;
+            font-size: 13px;
+            color: #555555;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .menu-item.active a, .menu-item a:hover {
+            background-color: #F1F3F5;
+            color: #111111;
+            font-weight: 600;
+        }
+
+        .sidebar-bottom {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            border-top: 1px solid #E9ECEF;
+            padding-top: 16px;
+        }
+
+        /* 메인 콘텐츠 영역 */
+        .main-content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+        }
+
+        .page-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: #111111;
+        }
+
+        /* 회원정보 수정 카드 폼 */
+        .card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            max-width: 640px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            color: #111111;
+            margin-bottom: 8px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            background-color: #ffffff;
+            color: #333333;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            border-color: #111111;
+        }
+
+        .form-group input:disabled {
+            background-color: #F8F9FA;
+            color: #888888;
+        }
+
+        .form-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 32px;
+        }
+
+        .btn-withdraw {
+            background: none;
+            border: none;
+            color: #FA5252;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .btn-save {
+            padding: 12px 24px;
+            background-color: #111111;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-save:hover {
+            background-color: #333333;
+        }
+
+        /* 위험 키워드 관리 */
+        .card + .card {
+            margin-top: 24px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111111;
+            margin-bottom: 6px;
+        }
+
+        .card-guide {
+            font-size: 12px;
+            color: #868E96;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .keyword-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .keyword-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 6px 6px 12px;
+            border: 1px solid #E9ECEF;
+            border-radius: 16px;
+            background-color: #F8F9FA;
+            font-size: 13px;
+            color: #333333;
+        }
+
+        .keyword-chip .weight {
+            font-size: 11px;
+            color: #868E96;
+        }
+
+        .keyword-chip .weight.high {
+            color: #E03131;
+            font-weight: 700;
+        }
+
+        .keyword-chip button {
+            width: 20px;
+            height: 20px;
+            border: none;
+            border-radius: 50%;
+            background: #E9ECEF;
+            color: #495057;
+            font-size: 12px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .keyword-chip button:hover {
+            background: #FFE3E3;
+            color: #E03131;
+        }
+
+        .keyword-add {
+            display: flex;
+            gap: 8px;
+        }
+
+        .keyword-add input,
+        .keyword-add select {
+            height: 40px;
+            padding: 0 12px;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #ffffff;
+            color: #333333;
+        }
+
+        .keyword-add input {
+            flex: 1;
+        }
+
+        .btn-secondary {
+            padding: 0 16px;
+            height: 40px;
+            border: 1px solid #CED4DA;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #111111;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .reanalyze {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid #F1F3F5;
+            font-size: 12px;
+            color: #868E96;
+        }
+    </style>
+</head>
+<body>
+
+    {% include '_sidebar.html' %}
+
+    <!-- 메인 회원정보 수정 화면 -->
+    <main class="main-content">
+        <h1 class="page-title">회원정보 수정</h1>
+        {% include '_flash.html' %}
+
+        <div class="card">
+            <form method="post" action="{{ url_for('settings') }}">
+                <div class="form-group">
+                    <label for="email">이메일</label>
+                    <input type="email" id="email" value="{{ current_user.email }}" disabled>
+                </div>
+
+                <div class="form-group">
+                    <label for="current-pwd">현재 비밀번호</label>
+                    <input type="password" id="current-pwd" name="current_password" placeholder="현재 비밀번호를 입력하세요 (저장·탈퇴 시 필요)" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="new-pwd">변경할 비밀번호</label>
+                    <input type="password" id="new-pwd" name="new_password" placeholder="변경할 비밀번호를 입력하세요 (변경하지 않으려면 비워두세요)">
+                </div>
+
+                <div class="form-group">
+                    <label for="mall-name">쇼핑몰 이름</label>
+                    <input type="text" id="mall-name" name="mall_name" value="{{ current_user.mall_name }}" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="mall-platform">쇼핑몰 플랫폼</label>
+                    <select id="mall-platform" name="mall_platform" required style="width:100%;padding:12px 16px;border:1px solid #E0E0E0;border-radius:8px;font-size:14px;background:#ffffff;color:#333333;outline:none;">
+                    <option value="NAVER" {{ 'selected' if current_user.mall_platform.value == 'NAVER' }}>네이버 스마트스토어</option>
+                    <option value="COUPANG" {{ 'selected' if current_user.mall_platform.value == 'COUPANG' }}>쿠팡</option>
+                    <option value="OWN" {{ 'selected' if current_user.mall_platform.value == 'OWN' }}>자사몰</option>
+                    <option value="ETC" {{ 'selected' if current_user.mall_platform.value == 'ETC' }}>기타</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="business-number">사업자번호</label>
+                    <input type="text" id="business-number" name="business_number" value="{{ current_user.business_number|bizno }}" inputmode="numeric" required>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-withdraw" formaction="{{ url_for('withdraw') }}"
+                            onclick="if(!document.getElementById('current-pwd').value){alert('탈퇴하려면 현재 비밀번호를 입력해 주세요.');return false;} return confirm('탈퇴하면 계정과 상품·리뷰·답글·위험 키워드 등 모든 데이터가 즉시 삭제되며 되돌릴 수 없습니다.\n정말 탈퇴하시겠습니까?');">회원 탈퇴</button>
+                    <button type="submit" class="btn-save">저장하기</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 위험 키워드 관리: 리뷰에 이 단어가 있으면 위험도가 올라가 대시보드·CS챗봇 상단에 노출 -->
+        <div class="card" id="risk-keywords">
+            <div class="card-title">위험 키워드 관리</div>
+            <div class="card-guide">
+                리뷰에 아래 단어가 들어 있으면 '위험 리뷰'로 분류됩니다. 위험도 3 이상인 단어는 하나만 있어도 가장 높은 위험도로 분류됩니다.<br>
+                키워드를 바꾼 뒤에는 '기존 리뷰 다시 분석'을 눌러야 이미 들어온 리뷰에도 반영됩니다.
+            </div>
+
+            <div class="keyword-list">
+                {% for kw in risk_keywords|default([]) %}
+                <form class="keyword-chip" method="post" action="{{ url_for('risk_keyword_delete', keyword_id=kw.id) }}">
+                    {{ kw.word }} <span class="weight {{ 'high' if kw.weight >= 3 }}">위험도 {{ kw.weight }}</span>
+                    <button type="submit" title="'{{ kw.word }}' 삭제" aria-label="{{ kw.word }} 삭제">×</button>
+                </form>
+                {% else %}
+                <span class="card-guide">등록된 위험 키워드가 없습니다.</span>
+                {% endfor %}
+            </div>
+
+            <form class="keyword-add" method="post" action="{{ url_for('risk_keyword_add') }}">
+                <input type="text" name="word" maxlength="100" required placeholder="추가할 위험 키워드 (예: 유통기한)" aria-label="위험 키워드">
+                <select name="weight" aria-label="위험도">
+                    <option value="1">위험도 1 (낮음)</option>
+                    <option value="2" selected>위험도 2 (보통)</option>
+                    <option value="3">위험도 3 (높음)</option>
+                </select>
+                <button type="submit" class="btn-save">추가</button>
+            </form>
+
+            <form class="reanalyze" method="post" action="{{ url_for('reanalyze') }}">
+                <span>현재 키워드로 내 상품의 모든 리뷰를 다시 분석합니다.</span>
+                <button type="submit" class="btn-secondary">기존 리뷰 다시 분석</button>
+            </form>
+        </div>
+    </main>
+
+</body>
+</html>

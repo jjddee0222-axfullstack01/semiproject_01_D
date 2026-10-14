@@ -63,10 +63,21 @@ def test_cschatbot_page(page):
     assert "답글을 달아야 할 위험 리뷰가 3건 있습니다" in r.text
     assert r.text.count('class="cs-row"') == 11                # 답글 없는 리뷰 전부
     assert "[긍정 리뷰]" in r.text and "[부정 리뷰]" in r.text
-    assert "상품 바로가기" in r.text and 'name="content"' in r.text
+    assert "상품 바로가기" in r.text
+    # 리뷰마다: 수정 가능한 추천 답글 + 복사 버튼 + 처리 완료 버튼
+    assert r.text.count('<textarea class="reply-content"') == 11
+    assert r.text.count('class="btn-copy"') == 11 and r.text.count('class="btn-done"') == 11
+    assert "navigator.clipboard" in r.text
     # 위험 리뷰가 맨 위
     first_row = r.text.split('class="cs-row"')[1]
     assert "⚠️" in first_row and "review-box negative" in first_row
+
+
+def test_cschatbot_copy_targets_match(page):
+    import re
+    html = page.get("/cschatbot").text
+    targets = re.findall(r'data-target="(reply-\d+)"', html)
+    assert targets and all(f'id="{t}"' in html for t in targets)
 
 
 def test_reply_drafts_by_sentiment(session, ids):
@@ -76,41 +87,73 @@ def test_reply_drafts_by_sentiment(session, ids):
     assert "교환 또는 환불" in generate_reply_draft(neg, "몰")[0]
 
 
-def test_cschatbot_register_reply(page, session, ids):
-    r = page.post("/cschatbot/replies", data={"review_id": ids["risky_a"], "content": "  죄송합니다. 바로 교환해 드릴게요.  "})
-    assert r.status_code == 200 and "답글을 등록했습니다" in r.text
-    assert "위험 리뷰가 2건" in r.text                          # 3 → 2
-    assert r.text.count('class="cs-row"') == 10                # 답글 단 리뷰는 목록에서 빠짐
+def test_cschatbot_hides_reviews_with_reply(page, ids):
+    """답글이 이미 등록된 리뷰(API·상품 대시보드 등)는 목록·경고 건수에서 빠짐"""
+    assert page.post(f"/api/v1/reviews/{ids['risky_a']}/replies", json={"content": "죄송합니다"}).status_code == 201
+    r = page.get("/cschatbot")
+    assert "위험 리뷰가 2건" in r.text and r.text.count('class="cs-row"') == 10
+
+
+def test_cschatbot_done_with_edited_reply(page, session, ids):
+    """수정한 답글로 처리 완료 → 저장되고 목록·경고 건수에서 빠짐 → 되돌리기 안내 표시"""
+    r = page.post("/cschatbot/done", data={"review_id": ids["risky_a"],
+                                           "content": "  수정한 답글입니다.\n바로 교환해 드릴게요.  "})
+    assert r.status_code == 200 and "처리 완료로 표시했습니다" in r.text and "되돌리기" in r.text
+    assert "위험 리뷰가 2건" in r.text and r.text.count('class="cs-row"') == 10
     reply = session.scalar(select(m.ReviewReply))
-    assert reply.review_id == ids["risky_a"] and reply.content == "죄송합니다. 바로 교환해 드릴게요."
-    assert reply.author_id is not None
-    # API 로도 같은 답글이 보임
+    assert reply.review_id == ids["risky_a"] and reply.author_id is not None
+    assert reply.content == "수정한 답글입니다.\n바로 교환해 드릴게요."
+    # API 로 리뷰 답글을 조회해도 같은 내용
     assert page.get(f"/api/v1/reviews/{ids['risky_a']}/replies").json()[0]["content"] == reply.content
+
+
+def test_cschatbot_undo(page, session, ids):
+    page.post("/cschatbot/done", data={"review_id": ids["risky_a"], "content": "답글"})
+    reply_id = session.scalar(select(m.ReviewReply.id))
+    r = page.post(f"/cschatbot/undo/{reply_id}")
+    assert "처리 완료를 취소했습니다" in r.text
+    assert "위험 리뷰가 3건" in r.text and r.text.count('class="cs-row"') == 11
+    session.expire_all()
+    assert session.scalar(select(m.ReviewReply)) is None
+
+
+def test_cschatbot_undo_other_sellers_reply(page, other_api, session, ids):
+    page.post("/cschatbot/done", data={"review_id": ids["risky_a"], "content": "답글"})
+    reply_id = session.scalar(select(m.ReviewReply.id))
+    assert "되돌릴 답글을 찾을 수 없습니다" in other_api.post(f"/cschatbot/undo/{reply_id}").text
+    assert session.scalar(select(m.ReviewReply.id)) == reply_id
+    # 남의 답글 번호를 ?done= 에 넣어도 되돌리기 안내가 나오지 않음
+    assert "되돌리기" not in other_api.get(f"/cschatbot?done={reply_id}").text.split("<script>")[0].split("</style>")[1]
 
 
 @pytest.mark.parametrize("data, message", [
     ({"content": ""}, "답글 내용을 입력해 주세요"),
+    ({"content": "   "}, "답글 내용을 입력해 주세요"),
     ({"content": "가" * 2001}, "2,000자 이하"),
     ({"review_id": "999999", "content": "x"}, "리뷰를 찾을 수 없습니다"),
     ({"review_id": "abc", "content": "x"}, "리뷰를 찾을 수 없습니다"),
 ])
-def test_cschatbot_reply_validation(page, session, ids, data, message):
-    r = page.post("/cschatbot/replies", data={"review_id": ids["risky_a"]} | data)
+def test_cschatbot_done_validation(page, session, ids, data, message):
+    r = page.post("/cschatbot/done", data={"review_id": ids["risky_a"]} | data)
     assert message in r.text
     assert session.scalar(select(m.ReviewReply)) is None
 
 
-def test_cschatbot_blinded_review(page, session, ids):
+def test_cschatbot_done_other_sellers_review(other_api, session, ids):
+    r = other_api.post("/cschatbot/done", data={"review_id": ids["risky_a"], "content": "x"})
+    assert "리뷰를 찾을 수 없습니다" in r.text
+    assert session.scalar(select(m.ReviewReply)) is None
+
+
+def test_cschatbot_blinded_review_hidden(page, session, ids):
     review = session.get(m.Review, ids["risky_a"])
     review.status, review.blind_reason = m.ReviewStatus.BLINDED, "악성"
     session.commit()
     assert "위험 리뷰가 2건" in page.get("/cschatbot").text    # 블라인드 리뷰는 목록에서 제외
-    r = page.post("/cschatbot/replies", data={"review_id": ids["risky_a"], "content": "x"})
-    assert "블라인드된 리뷰에는 답글을 등록할 수 없습니다" in r.text
+    r = page.post("/cschatbot/done", data={"review_id": ids["risky_a"], "content": "x"})
+    assert "블라인드된 리뷰는 처리할 수 없습니다" in r.text
 
 
-def test_cschatbot_other_sellers_review(other_api, session, ids):
-    r = other_api.post("/cschatbot/replies", data={"review_id": ids["risky_a"], "content": "x"})
-    assert "리뷰를 찾을 수 없습니다" in r.text
-    assert session.scalar(select(m.ReviewReply)) is None
-    assert "모든 리뷰에 답글을 달았어요" in other_api.get("/cschatbot").text
+def test_cschatbot_other_seller_sees_nothing(other_api):
+    r = other_api.get("/cschatbot")
+    assert "답글을 기다리는 리뷰가 없습니다" in r.text and "alert-box\">" not in r.text

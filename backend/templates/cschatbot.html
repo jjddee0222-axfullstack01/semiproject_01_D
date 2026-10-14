@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PIN POINT REVIEW - CS 챗봇</title>
+    <title>PIN POINT REVIEW - CS챗봇</title>
     <style>
         * {
             box-sizing: border-box;
@@ -123,7 +123,7 @@
             color: #111111;
         }
 
-        /* 상단 경고 박스 */
+        /* 위험 리뷰 알림 경고 박스 */
         .alert-box {
             background-color: #FFF5F5;
             border: 1px solid #FFE3E3;
@@ -138,7 +138,7 @@
             gap: 8px;
         }
 
-        /* 메인 컨테이너 카드 */
+        /* CS챗봇 컨테이너 카드 */
         .cs-container {
             background-color: #ffffff;
             border-radius: 12px;
@@ -171,7 +171,7 @@
             border-bottom: none;
         }
 
-        /* 리뷰 박스 영역 */
+        /* 리뷰 상자 스타일 */
         .review-box {
             padding: 16px;
             border-radius: 8px;
@@ -212,7 +212,7 @@
             color: #111111;
         }
 
-        /* 추천 답글 박스 영역 */
+        /* 추천 답글 상자 스타일 */
         .reply-box {
             background-color: #F8F9FA;
             border: 1px solid #E9ECEF;
@@ -227,36 +227,6 @@
 
         .reply-content {
             line-height: 1.4;
-        }
-
-        .reply-footer {
-            display: flex;
-            justify-content: flex-end;
-        }
-
-        .btn-register {
-            background-color: #111111;
-            color: #ffffff;
-            border: none;
-            padding: 8px 14px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        .btn-register:hover {
-            background-color: #333333;
-        }
-
-        .reply-box form {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .reply-content {
             width: 100%;
             min-height: 120px;
             padding: 10px;
@@ -271,6 +241,86 @@
         .reply-content:focus {
             outline: none;
             border-color: #868E96;
+        }
+
+        .reply-footer {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .reply-hint {
+            margin-right: auto;
+            font-size: 11px;
+            color: #868E96;
+        }
+
+        .btn-copy {
+            background-color: #111111;
+            color: #ffffff;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-copy:hover {
+            background-color: #333333;
+        }
+
+        .btn-copy.copied {
+            background-color: #2B8A3E;
+        }
+
+        /* 처리 완료 버튼 (복사 버튼보다 한 단계 약하게) */
+        .btn-done {
+            background-color: #ffffff;
+            color: #111111;
+            border: 1px solid #CED4DA;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        .btn-done:hover {
+            border-color: #111111;
+        }
+
+        .btn-done.ready {
+            border-color: #2B8A3E;
+            color: #2B8A3E;
+        }
+
+        /* 처리 완료 후 되돌리기 안내 */
+        .done-box {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: #EBFBEE;
+            border: 1px solid #B2F2BB;
+            color: #2B8A3E;
+            font-size: 13px;
+        }
+
+        .btn-undo {
+            background: none;
+            border: none;
+            color: #2B8A3E;
+            font-size: 12px;
+            font-weight: 600;
+            text-decoration: underline;
+            cursor: pointer;
         }
 
         .review-date {
@@ -297,10 +347,19 @@
 
     {% include '_sidebar.html' %}
 
-    <!-- 메인 CS 챗봇 화면 -->
+    <!-- 메인 CS챗봇 화면 -->
     <main class="main-content">
         <h1 class="page-title">CS챗봇</h1>
         {% include '_flash.html' %}
+
+        {% if just_done %}
+        <div class="done-box">
+            <span>✅ {{ just_done.review.reviewer_name|mask_name }} 고객님 리뷰를 처리 완료로 표시했습니다.</span>
+            <form method="post" action="{{ url_for('cschatbot_undo', reply_id=just_done.id) }}">
+                <button type="submit" class="btn-undo">되돌리기</button>
+            </form>
+        </div>
+        {% endif %}
 
         {% if risky_unreplied %}
         <div class="alert-box">
@@ -326,19 +385,20 @@
                     <div class="review-date">★ {{ r.rating }} · {{ r.reviewer_name|mask_name }} · {{ r.reviewed_at|dotdate }}</div>
                     <div>{{ r.content_raw }}</div>
                 </div>
-                <div class="reply-box">
-                    <form method="post" action="{{ url_for('cschatbot_reply') }}">
-                        <input type="hidden" name="review_id" value="{{ r.id }}">
-                        <!-- 추천 답글을 그대로 쓰거나 고쳐서 등록 -->
-                        <textarea class="reply-content" name="content" maxlength="2000" required>{{ row.draft }}</textarea>
-                        <div class="reply-footer">
-                            <button type="submit" class="btn-register">답글 등록하기</button>
-                        </div>
-                    </form>
-                </div>
+                <form class="reply-box" method="post" action="{{ url_for('cschatbot_done') }}">
+                    <input type="hidden" name="review_id" value="{{ r.id }}">
+                    <!-- 추천 답글을 자유롭게 고친 뒤 복사 → 쇼핑몰에 붙여넣기 → 처리 완료 -->
+                    <textarea class="reply-content" id="reply-{{ r.id }}" name="content"
+                              maxlength="{{ reply_max_length }}" required>{{ row.draft }}</textarea>
+                    <div class="reply-footer">
+                        <span class="reply-hint">수정할 수 있어요</span>
+                        <button type="button" class="btn-copy" data-target="reply-{{ r.id }}">답글 복사하기</button>
+                        <button type="submit" class="btn-done" title="쇼핑몰에 답글을 단 뒤 눌러 주세요. 목록에서 빠집니다.">처리 완료</button>
+                    </div>
+                </form>
             </div>
             {% else %}
-            <div class="empty-box">답글을 기다리는 리뷰가 없습니다. 모든 리뷰에 답글을 달았어요! 🎉</div>
+            <div class="empty-box">답글을 기다리는 리뷰가 없습니다. 🎉</div>
             {% endfor %}
 
             {% if total_unreplied > rows|length %}
@@ -346,6 +406,44 @@
             {% endif %}
         </div>
     </main>
+
+    <script>
+        // 추천 답글을 클립보드에 복사 → 쇼핑몰 관리자 페이지 답글란에 붙여넣기
+        async function copyText(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text);
+            }
+            // http://192.168.x.x 처럼 보안 컨텍스트가 아닐 때의 대체 방법
+            const area = document.createElement("textarea");
+            area.value = text;
+            area.style.position = "fixed";
+            area.style.opacity = "0";
+            document.body.appendChild(area);
+            area.select();
+            const ok = document.execCommand("copy");
+            area.remove();
+            if (!ok) throw new Error("copy failed");
+        }
+
+        document.querySelectorAll(".btn-copy").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const text = document.getElementById(button.dataset.target).value.trim();
+                try {
+                    await copyText(text);
+                    button.textContent = "복사됨 ✓";
+                    button.classList.add("copied");
+                    // 복사했으면 '처리 완료'를 눈에 띄게
+                    button.parentElement.querySelector(".btn-done").classList.add("ready");
+                } catch (err) {
+                    button.textContent = "복사 실패 - 직접 선택해 주세요";
+                }
+                setTimeout(() => {
+                    button.textContent = "답글 복사하기";
+                    button.classList.remove("copied");
+                }, 2000);
+            });
+        });
+    </script>
 
 </body>
 </html>

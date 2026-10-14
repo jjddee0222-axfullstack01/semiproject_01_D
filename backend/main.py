@@ -383,7 +383,9 @@ def analysis_page(request: Request,
 
 
 # ──────────────────────────────────────────────
-# CS챗봇 — 답글이 없는 리뷰 + 추천 답글  (cschatbot.html)
+# CS챗봇 — 답글이 없는 리뷰 + 추천 답글 수정·복사·처리 완료  (cschatbot.html)
+#   처리 완료 = 셀러가 쇼핑몰에 붙여넣은 최종 답글을 review_replies 에 저장
+#   → 답글이 생긴 리뷰는 목록과 '위험 리뷰 n건'에서 빠진다 (ERD 변경 없음)
 # ──────────────────────────────────────────────
 CS_LIST_LIMIT = 30
 REPLY_MAX_LENGTH = 2000      # API(ReplyCreate)와 같은 기준
@@ -393,7 +395,9 @@ REPLY_MAX_LENGTH = 2000      # API(ReplyCreate)와 같은 기준
 def cschatbot_page(request: Request,
                    user: User = Depends(login_required),
                    db: Session = Depends(get_session)):
-    """아직 답글이 없는 리뷰를 위험도 높은 순 → 최신순으로 보여 주고, 리뷰마다 추천 답글 초안을 붙인다"""
+    """아직 답글이 없는 리뷰를 위험도 높은 순 → 최신순으로 보여 주고, 리뷰마다 추천 답글 초안을 붙인다.
+    셀러는 초안을 고친 뒤 '답글 복사하기'로 복사해 쇼핑몰(스마트스토어·쿠팡 등) 관리자 페이지에 붙여넣고,
+    '처리 완료'를 눌러 목록에서 뺀다. (복사는 브라우저에서 처리)"""
     unreplied = (visible_reviews().join(Review.product).join(Review.analysis)
                  .where(Product.seller_id == user.id, ~Review.replies.any()))
     reviews = db.scalars(
@@ -407,18 +411,31 @@ def cschatbot_page(request: Request,
     total_unreplied = db.scalar(unreplied.with_only_columns(func.count(Review.id)))
 
     rows = [{"review": r, "draft": generate_reply_draft(r, user.mall_name)[0]} for r in reviews]
+
+    # 방금 처리 완료한 답글 → '되돌리기' 안내 (본인이 쓴 답글일 때만)
+    done_param = request.query_params.get("done", "")
+    just_done = _own_reply(db, user, int(done_param)) if done_param.isdigit() else None
+
     return render(request, "cschatbot.html", active_menu="cschatbot", rows=rows,
                   risky_unreplied=risky_unreplied, total_unreplied=total_unreplied,
-                  list_limit=CS_LIST_LIMIT)
+                  list_limit=CS_LIST_LIMIT, just_done=just_done, reply_max_length=REPLY_MAX_LENGTH)
 
 
-@app.post("/cschatbot/replies", name="cschatbot_reply")
-def cschatbot_reply(request: Request,
-                    review_id: str = Form(""),
-                    content: str = Form(""),
-                    user: User = Depends(login_required),
-                    db: Session = Depends(get_session)):
-    """추천 답글(또는 수정한 답글)을 리뷰에 등록 → 등록된 리뷰는 CS챗봇 목록에서 빠진다"""
+def _own_reply(db: Session, user: User, reply_id: int) -> Optional[ReviewReply]:
+    """내 상품 리뷰에 내가 단 답글만 돌려줌 (아니면 None)"""
+    reply = db.get(ReviewReply, reply_id)
+    if reply is None or reply.author_id != user.id or reply.review.product.seller_id != user.id:
+        return None
+    return reply
+
+
+@app.post("/cschatbot/done", name="cschatbot_done")
+def cschatbot_done(request: Request,
+                   review_id: str = Form(""),
+                   content: str = Form(""),
+                   user: User = Depends(login_required),
+                   db: Session = Depends(get_session)):
+    """처리 완료: 셀러가 (수정해서) 사용한 최종 답글을 저장 → CS챗봇 목록에서 빠짐"""
     content = content.strip()
     review = db.get(Review, int(review_id)) if review_id.isdigit() else None
 
@@ -426,7 +443,7 @@ def cschatbot_reply(request: Request,
     if review is None or review.product.seller_id != user.id:
         error = "리뷰를 찾을 수 없습니다."
     elif review.status == ReviewStatus.BLINDED:
-        error = "블라인드된 리뷰에는 답글을 등록할 수 없습니다."
+        error = "블라인드된 리뷰는 처리할 수 없습니다."
     elif not content:
         error = "답글 내용을 입력해 주세요."
     elif len(content) > REPLY_MAX_LENGTH:
@@ -436,9 +453,25 @@ def cschatbot_reply(request: Request,
         flash(request, error, "error")
         return redirect(request, "cschatbot")
 
-    db.add(ReviewReply(review_id=review.id, author_id=user.id, content=content))
+    reply = ReviewReply(review_id=review.id, author_id=user.id, content=content)
+    db.add(reply)
     db.commit()
-    flash(request, f"{mask_name(review.reviewer_name or '고객')} 고객님 리뷰에 답글을 등록했습니다.")
+    return RedirectResponse(f"{request.url_for('cschatbot')}?done={reply.id}", status_code=303)
+
+
+@app.post("/cschatbot/undo/{reply_id}", name="cschatbot_undo")
+def cschatbot_undo(request: Request,
+                   reply_id: int,
+                   user: User = Depends(login_required),
+                   db: Session = Depends(get_session)):
+    """처리 완료 되돌리기: 저장한 답글을 지워 리뷰를 다시 목록에 표시"""
+    reply = _own_reply(db, user, reply_id)
+    if reply is None:
+        flash(request, "되돌릴 답글을 찾을 수 없습니다.", "error")
+    else:
+        db.delete(reply)
+        db.commit()
+        flash(request, "처리 완료를 취소했습니다. 리뷰가 다시 목록에 표시됩니다.")
     return redirect(request, "cschatbot")
 
 

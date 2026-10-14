@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PIN POINT REVIEW - CS 챗봇</title>
+    <title>PIN POINT REVIEW - CS챗봇</title>
     <style>
         * {
             box-sizing: border-box;
@@ -123,7 +123,7 @@
             color: #111111;
         }
 
-        /* 상단 경고 박스 */
+        /* 위험 리뷰 알림 경고 박스 */
         .alert-box {
             background-color: #FFF5F5;
             border: 1px solid #FFE3E3;
@@ -138,7 +138,7 @@
             gap: 8px;
         }
 
-        /* 메인 컨테이너 카드 */
+        /* CS챗봇 컨테이너 카드 */
         .cs-container {
             background-color: #ffffff;
             border-radius: 12px;
@@ -171,7 +171,7 @@
             border-bottom: none;
         }
 
-        /* 리뷰 박스 영역 */
+        /* 리뷰 상자 스타일 */
         .review-box {
             padding: 16px;
             border-radius: 8px;
@@ -212,7 +212,7 @@
             color: #111111;
         }
 
-        /* 추천 답글 박스 영역 */
+        /* 추천 답글 상자 스타일 */
         .reply-box {
             background-color: #F8F9FA;
             border: 1px solid #E9ECEF;
@@ -234,7 +234,7 @@
             justify-content: flex-end;
         }
 
-        .btn-register {
+        .btn-copy {
             background-color: #111111;
             color: #ffffff;
             border: none;
@@ -246,7 +246,7 @@
             transition: background-color 0.2s;
         }
 
-        .btn-register:hover {
+        .btn-copy:hover {
             background-color: #333333;
         }
     </style>
@@ -282,7 +282,7 @@
         </div>
     </aside>
 
-    <!-- 메인 CS 챗봇 화면 -->
+    <!-- 메인 CS챗봇 화면 -->
     <main class="main-content">
         <h1 class="page-title">CS챗봇</h1>
 
@@ -300,7 +300,7 @@
             <div class="cs-row">
                 <div class="review-box positive">
                     <div class="review-top-info">
-                        <span>[긍정 리뷰] 프리미엄 시그니처 상품 A</span>
+                        <span>[긍정 리뷰] 리뷰가 달린 상품 이름</span>
                         <span class="product-link">상품 바로가기</span>
                     </div>
                     <div>배송도 빠르고 상품 상태가 너무 마음에 듭니다! 파손 없이 잘 왔어요.</div>
@@ -308,7 +308,7 @@
                 <div class="reply-box">
                     <div class="reply-content">안녕하세요 고객님! 소중한 리뷰 남겨주셔서 진심으로 감사합니다. 앞으로도 좋은 상품과 서비스로 보답하겠습니다.</div>
                     <div class="reply-footer">
-                        <button class="btn-register">답글 등록하기</button>
+                        <button class="btn-copy">답글 복사하기</button>
                     </div>
                 </div>
             </div>
@@ -317,15 +317,15 @@
             <div class="cs-row">
                 <div class="review-box negative">
                     <div class="review-top-info">
-                        <span>[부정 리뷰] 에센셜 베이직 아이템 B</span>
+                        <span>[부정 리뷰] 리뷰가 달린 상품 이름</span>
                         <span class="product-link">상품 바로가기</span>
                     </div>
                     <div>생각했던 것보다 마감 처리가 살짝 헐거워요. 실망스럽습니다.</div>
                 </div>
                 <div class="reply-box">
-                    <div class="reply-content">불편을 드려 대단히 죄송합니다 고객님. 말씀해 주신 마감 부분에 대해 확인 후 신속하게 교환 또는 환불 조치를 도와드리겠습니다.</div>
+                    <div class="reply-content">불편을 드려 대단히 죄송합니다 고객님. 말씀해 주신 부분에 대해 확인 후 신속하게 교환 또는 환불 조치를 도와드리겠습니다.</div>
                     <div class="reply-footer">
-                        <button class="btn-register">답글 등록하기</button>
+                        <button class="btn-copy">답글 복사하기</button>
                     </div>
                 </div>
             </div>
@@ -334,7 +334,7 @@
             <div class="cs-row">
                 <div class="review-box positive">
                     <div class="review-top-info">
-                        <span>[긍정 리뷰] 컴포트 데일리 상품 C</span>
+                        <span>[긍정 리뷰] 리뷰가 달린 상품 이름</span>
                         <span class="product-link">상품 바로가기</span>
                     </div>
                     <div>가성비 최고입니다. 주변에도 추천했어요! 재구매 의사 있습니다.</div>
@@ -342,6 +342,29 @@
                 <div class="reply-box">
                     <div class="reply-content">주변 분들께도 추천해 주셨다니 정말 기쁩니다! 앞으로도 만족하실 수 있도록 최선을 다하는 쇼핑몰이 되겠습니다.</div>
                     <div class="reply-footer">
-                        <button class="btn-register">답글 등록하기</button>
+                        <button class="btn-copy">답글 복사하기</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- 4번 행 (부정 리뷰) -->
+            <div class="cs-row">
+                <div class="review-box negative">
+                    <div class="review-top-info">
+                        <span>[부정 리뷰] 리뷰가 달린 상품 이름</span>
+                        <span class="product-link">상품 바로가기</span>
+                    </div>
+                    <div>배송 포장이 살짝 찌그러져서 왔어요. 제품은 멀쩡하지만 아쉽네요.</div>
+                </div>
+                <div class="reply-box">
+                    <div class="reply-content">배송 과정에서 불편을 드려 죄송합니다. 다음부터는 더욱 안전하고 꼼꼼하게 포장하여 발송해 드리겠습니다.</div>
+                    <div class="reply-footer">
+                        <button class="btn-copy">답글 복사하기</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+</body>
+</html>

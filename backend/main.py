@@ -36,8 +36,8 @@ try:
     from .database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                            seller_risk_keywords, this_month)
     from .db import describe_db, get_session
-    from .models import (Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                         ReviewAnalysis, ReviewReply, ReviewStatus, ShopMonthlyStat, User,
+    from .models import (BlindAction, Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
+                         ReviewAnalysis, ReviewBlindLog, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                          UserStatus, visible_reviews)
     from .reply_drafts import generate_reply_draft
     from .schemas import ReviewCreate, ReviewCreateResult
@@ -50,8 +50,8 @@ except ImportError:
     from database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                           seller_risk_keywords, this_month)
     from db import describe_db, get_session
-    from models import (Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                        ReviewAnalysis, ReviewReply, ReviewStatus, ShopMonthlyStat, User,
+    from models import (BlindAction, Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
+                        ReviewAnalysis, ReviewBlindLog, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                         UserStatus, visible_reviews)
     from reply_drafts import generate_reply_draft
     from schemas import ReviewCreate, ReviewCreateResult
@@ -183,6 +183,13 @@ def login(request: Request,
     return response
 
 
+@app.get("/password-help", name="password_help")
+def password_help(request: Request):
+    """비밀번호 찾기 (MoSCoW: 이번 범위 제외) — 안내만 표시"""
+    flash(request, "비밀번호 찾기는 아직 지원하지 않습니다. 서비스 관리자에게 비밀번호 초기화를 요청해 주세요.", "error")
+    return redirect(request, "login")
+
+
 @app.get("/signup", name="signup", response_class=HTMLResponse)
 def signup_page(request: Request):
     return render(request, "joinmembership.html")
@@ -271,9 +278,11 @@ def dashboard(request: Request,
 # ──────────────────────────────────────────────
 @app.get("/products", name="products", response_class=HTMLResponse)
 def products(request: Request,
+             q: str = "",
              user: User = Depends(login_required),
              db: Session = Depends(get_session)):
-    """상품 목록 — 평균 별점 / 리뷰 수 / 긍정·부정·위험 리뷰 수 (블라인드 리뷰 제외)"""
+    """상품 목록 — 평균 별점 / 리뷰 수 / 긍정·부정·위험 리뷰 수 (블라인드 리뷰 제외). ?q= 상품명 검색"""
+    q = q.strip()[:100]
     positive = func.sum(case((ReviewAnalysis.sentiment == Polarity.POS, 1), else_=0))
     negative = func.sum(case((ReviewAnalysis.sentiment == Polarity.NEG, 1), else_=0))
     risky = func.sum(case((ReviewAnalysis.severity >= RISK_SEVERITY, 1), else_=0))
@@ -287,7 +296,8 @@ def products(request: Request,
         # LEFT JOIN 이라 visible_reviews() 대신 조인 조건에 VISIBLE 을 넣음 (리뷰 없는 상품도 표시)
         .outerjoin(Review, (Review.product_id == Product.id) & (Review.status == ReviewStatus.VISIBLE))
         .outerjoin(ReviewAnalysis, ReviewAnalysis.review_id == Review.id)
-        .where(Product.seller_id == user.id)
+        .where(Product.seller_id == user.id,
+               Product.name.contains(q, autoescape=True) if q else True)
         .group_by(Product.id)
         .order_by(Product.id)
     ).all()
@@ -296,7 +306,7 @@ def products(request: Request,
               "review_count": n, "avg_rating": float(avg), "positive_count": int(pos),
               "negative_count": int(neg), "risky_count": int(rk)}
              for p, n, avg, pos, neg, rk in rows]
-    return render(request, "products.html", active_menu="products", products=items)
+    return render(request, "products.html", active_menu="products", products=items, q=q)
 
 
 @app.get("/products/{product_id}", name="product_dashboard", response_class=HTMLResponse)
@@ -321,10 +331,70 @@ def product_dashboard(request: Request,
     stat = db.get(ProductMonthlyStat, (product_id, this_month()))
     positive_summary, negative_summary = summarize_reviews(reviews)
 
+    blinded_reviews = db.scalars(
+        select(Review).where(Review.product_id == product_id, Review.status == ReviewStatus.BLINDED)
+        .order_by(Review.blinded_at.desc(), Review.id.desc())
+    ).all()
+
     return render(request, "productdashboard.html", active_menu="products",
-                  product=product, reviews=reviews, risky_count=risky_count,
+                  product=product, reviews=reviews, risky_count=risky_count, blinded_reviews=blinded_reviews,
                   avg_rating=avg_rating, monthly_buyers=stat.buyers if stat else 0,
                   positive_summary=positive_summary, negative_summary=negative_summary)
+
+
+# ──────────────────────────────────────────────
+# 리뷰 블라인드 / 복구  (productdashboard.html, US-06 · D2)
+#   API(/api/v1/reviews/{id}/blind)와 같은 규칙: 사유 필수, 소프트 삭제, 이력(review_blind_logs) 기록
+# ──────────────────────────────────────────────
+BLIND_REASON_MAX = 500
+
+
+def _owned_review_or_404(db: Session, user: User, review_id: int) -> Review:
+    review = db.get(Review, review_id)
+    # 화면에서는 남의 리뷰도 '없는 페이지'로 처리 (API는 403)
+    if review is None or review.product.seller_id != user.id:
+        raise HTTPException(status_code=404)
+    return review
+
+
+@app.post("/reviews/{review_id}/blind", name="review_blind")
+def review_blind(request: Request,
+                 review_id: int,
+                 reason: str = Form(""),
+                 user: User = Depends(login_required),
+                 db: Session = Depends(get_session)):
+    review = _owned_review_or_404(db, user, review_id)
+    reason = reason.strip()
+    if review.status == ReviewStatus.BLINDED:
+        flash(request, "이미 블라인드된 리뷰입니다.", "error")
+    elif not reason:
+        flash(request, "블라인드 사유를 입력해 주세요.", "error")
+    elif len(reason) > BLIND_REASON_MAX:
+        flash(request, f"블라인드 사유는 {BLIND_REASON_MAX}자 이하로 입력해 주세요.", "error")
+    else:
+        review.status, review.blind_reason = ReviewStatus.BLINDED, reason
+        review.blinded_by, review.blinded_at = user.id, datetime.now()
+        db.add(ReviewBlindLog(review=review, actor_id=user.id, action=BlindAction.BLIND, reason=reason))
+        db.commit()
+        flash(request, "리뷰를 블라인드 처리했습니다. 통계에서도 제외됩니다.")
+    return redirect(request, "product_dashboard", product_id=review.product_id)
+
+
+@app.post("/reviews/{review_id}/restore", name="review_restore")
+def review_restore(request: Request,
+                   review_id: int,
+                   user: User = Depends(login_required),
+                   db: Session = Depends(get_session)):
+    review = _owned_review_or_404(db, user, review_id)
+    if review.status != ReviewStatus.BLINDED:
+        flash(request, "블라인드 상태인 리뷰가 아닙니다.", "error")
+    else:
+        review.status = ReviewStatus.VISIBLE
+        review.blind_reason = review.blinded_by = review.blinded_at = None
+        db.add(ReviewBlindLog(review=review, actor_id=user.id, action=BlindAction.RESTORE))
+        db.commit()
+        flash(request, "블라인드를 해제했습니다. 리뷰가 다시 목록과 통계에 포함됩니다.")
+    return redirect(request, "product_dashboard", product_id=review.product_id)
 
 
 # ──────────────────────────────────────────────
@@ -371,7 +441,9 @@ def analysis_page(request: Request,
         .where(Product.seller_id == user.id, Review.status == ReviewStatus.BLINDED)
     )
 
-    return render(request, "analysis.html", active_menu="analysis",
+    products = db.scalars(select(Product).where(Product.seller_id == user.id).order_by(Product.id)).all()
+
+    return render(request, "analysis.html", active_menu="analysis", products=products,
                   stats=stat or {"visitors": 0, "buyers": 0},
                   rate_now=rate_now, rate_change=rate_change,
                   avg_rating=sum(r.rating for r in reviews) / len(reviews) if reviews else None,
@@ -500,9 +572,21 @@ def add_review(body: ReviewCreate,
 # ──────────────────────────────────────────────
 # 설정 - 회원정보 수정 / 회원 탈퇴  (informationedit.html)
 # ──────────────────────────────────────────────
+def my_risk_keywords(db: Session, user: User) -> list:
+    return db.scalars(select(RiskKeyword).where(RiskKeyword.seller_id == user.id)
+                      .order_by(RiskKeyword.weight.desc(), RiskKeyword.word)).all()
+
+
+def render_settings(request: Request, db: Session, user: User, status_code: int = 200) -> HTMLResponse:
+    return render(request, "informationedit.html", status_code=status_code, active_menu="settings",
+                  risk_keywords=my_risk_keywords(db, user))
+
+
 @app.get("/settings", name="settings", response_class=HTMLResponse)
-def settings_page(request: Request, user: User = Depends(login_required)):
-    return render(request, "informationedit.html", active_menu="settings")
+def settings_page(request: Request,
+                  user: User = Depends(login_required),
+                  db: Session = Depends(get_session)):
+    return render_settings(request, db, user)
 
 
 @app.post("/settings")
@@ -534,7 +618,7 @@ def settings(request: Request,
 
     if error:
         flash(request, error, "error")
-        return render(request, "informationedit.html", status_code=status, active_menu="settings")
+        return render_settings(request, db, user, status_code=status)
 
     user.mall_name, user.mall_platform, user.business_number = mall_name, platform, biz
     if new_password:
@@ -542,6 +626,63 @@ def settings(request: Request,
     db.commit()
     flash(request, "회원정보가 저장되었습니다.")
     return redirect(request, "settings")
+
+
+# ── 위험 키워드 관리 (설정 화면) — API(/api/v1/risk-keywords)와 같은 규칙
+RISK_WORD_MAX = 100
+
+
+@app.post("/settings/risk-keywords", name="risk_keyword_add")
+def risk_keyword_add(request: Request,
+                     word: str = Form(""),
+                     weight: str = Form("2"),
+                     user: User = Depends(login_required),
+                     db: Session = Depends(get_session)):
+    word = word.strip()
+    level = int(weight) if weight.isdigit() else 0
+    if not word:
+        flash(request, "위험 키워드를 입력해 주세요.", "error")
+    elif len(word) > RISK_WORD_MAX:
+        flash(request, f"위험 키워드는 {RISK_WORD_MAX}자 이하로 입력해 주세요.", "error")
+    elif not 1 <= level <= 10:
+        flash(request, "위험도는 1~10 사이로 선택해 주세요.", "error")
+    elif db.scalar(select(RiskKeyword.id).where(RiskKeyword.seller_id == user.id, RiskKeyword.word == word)):
+        flash(request, f"'{word}'은(는) 이미 등록된 위험 키워드입니다.", "error")
+    else:
+        db.add(RiskKeyword(seller_id=user.id, word=word, weight=level))
+        db.commit()
+        flash(request, f"위험 키워드 '{word}'을(를) 추가했습니다. 기존 리뷰에 반영하려면 '기존 리뷰 다시 분석'을 눌러 주세요.")
+    return RedirectResponse(f"{request.url_for('settings')}#risk-keywords", status_code=303)
+
+
+@app.post("/settings/risk-keywords/{keyword_id}/delete", name="risk_keyword_delete")
+def risk_keyword_delete(request: Request,
+                        keyword_id: int,
+                        user: User = Depends(login_required),
+                        db: Session = Depends(get_session)):
+    kw = db.get(RiskKeyword, keyword_id)
+    if kw is None or kw.seller_id != user.id:
+        flash(request, "위험 키워드를 찾을 수 없습니다.", "error")
+    else:
+        db.delete(kw)
+        db.commit()
+        flash(request, f"위험 키워드 '{kw.word}'을(를) 삭제했습니다.")
+    return RedirectResponse(f"{request.url_for('settings')}#risk-keywords", status_code=303)
+
+
+@app.post("/settings/reanalyze", name="reanalyze")
+def reanalyze(request: Request,
+              user: User = Depends(login_required),
+              db: Session = Depends(get_session)):
+    """현재 위험 키워드로 내 상품의 모든 리뷰(블라인드 포함)를 다시 분석"""
+    keywords = seller_risk_keywords(db, user.id)
+    reviews = db.scalars(select(Review).join(Review.product).where(Product.seller_id == user.id)
+                         .options(selectinload(Review.analysis), selectinload(Review.keyword_links))).all()
+    for review in reviews:
+        analyze_and_save(db, review, keywords)
+    db.commit()
+    flash(request, f"리뷰 {len(reviews)}건을 현재 위험 키워드로 다시 분석했습니다.")
+    return RedirectResponse(f"{request.url_for('settings')}#risk-keywords", status_code=303)
 
 
 @app.post("/withdraw", name="withdraw")
@@ -552,7 +693,7 @@ def withdraw(request: Request,
     """회원 탈퇴 (US-04, D5): 비밀번호 재확인 → status=WITHDRAWN 소프트 탈퇴 → 모든 세션 삭제"""
     if not verify_password(current_password, user.password_hash):
         flash(request, "비밀번호가 올바르지 않아 탈퇴할 수 없습니다.", "error")
-        return render(request, "informationedit.html", status_code=401, active_menu="settings")
+        return render_settings(request, db, user, status_code=401)
 
     user.status = UserStatus.WITHDRAWN
     user.withdrawn_at = datetime.now()

@@ -190,6 +190,47 @@
             font-size: 13px;
             color: #666666;
         }
+
+        /* 상품 검색 */
+        .search-form {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .search-form input {
+            flex: 1;
+            max-width: 360px;
+            height: 38px;
+            padding: 0 12px;
+            border: 1px solid #DEE2E6;
+            border-radius: 8px;
+            font-size: 13px;
+            background-color: #ffffff;
+        }
+
+        .search-form button,
+        .search-form a {
+            height: 38px;
+            padding: 0 16px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .search-form button {
+            border: none;
+            background-color: #111111;
+            color: #ffffff;
+            cursor: pointer;
+        }
+
+        .search-form a {
+            color: #666666;
+        }
     </style>
 </head>
 <body>
@@ -203,6 +244,12 @@
             <span class="page-guide">상품별 대시보드를 확인하려면 상품을 클릭하세요.</span>
         </div>
         {% include '_flash.html' %}
+
+        <form class="search-form" method="get" action="{{ url_for('products') }}" role="search">
+            <input type="search" name="q" value="{{ q }}" placeholder="상품 이름으로 검색" aria-label="상품 검색" maxlength="100">
+            <button type="submit">검색</button>
+            {% if q %}<a href="{{ url_for('products') }}">검색 해제</a>{% endif %}
+        </form>
 
         <div class="product-list">
             {% for p in products %}
@@ -219,7 +266,7 @@
             </a>
             {% else %}
             <div class="product-card" style="cursor:default;">
-                <div class="product-info"><div class="product-name">등록된 상품이 없습니다.</div></div>
+                <div class="product-info"><div class="product-name">{% if q %}'{{ q }}'에 해당하는 상품이 없습니다.{% else %}등록된 상품이 없습니다.{% endif %}</div></div>
             </div>
             {% endfor %}
         </div>

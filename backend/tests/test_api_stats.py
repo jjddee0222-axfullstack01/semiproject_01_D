@@ -57,21 +57,22 @@ def test_issue_types(api):
     assert body["total"] == sum(i["count"] for i in body["items"]) > 0
 
 
-def test_keywords_top(api, session, ids):
-    pos = m.Keyword(word="배송", polarity=m.Polarity.POS)
-    neg = m.Keyword(word="불량", polarity=m.Polarity.NEG)
-    review_ids = session.scalars(select(m.Review.id).order_by(m.Review.id).limit(3)).all()
-    session.add_all([m.ReviewKeyword(review_id=r, keyword=pos, score=0.5) for r in review_ids])
-    session.add(m.ReviewKeyword(review_id=ids["risky_a"], keyword=neg, score=0.9))
-    session.commit()
-
+def test_keywords_top(api, ids):
+    """리뷰 분석 시 자동 추출된 키워드('배송 만족', '환불' …)로 TOP N 집계"""
     top = api.get(f"{API}/stats/keywords/top").json()
-    assert top[0] == {"rank": 1, "keyword_id": pos.id, "word": "배송", "polarity": "POS", "count": 3}
-    assert [k["word"] for k in api.get(f"{API}/stats/keywords/top?polarity=NEG").json()] == ["불량"]
+    assert len(top) == 10 and [k["rank"] for k in top] == list(range(1, 11))
+    assert top[0]["count"] == 3 and top[0]["word"] in ("배송 만족", "품질 만족")
+    assert all(top[i]["count"] >= top[i + 1]["count"] for i in range(9))          # 많이 나온 순
+
+    neg = [k["word"] for k in api.get(f"{API}/stats/keywords/top?polarity=NEG&limit=50").json()]
+    assert "불량" in neg and "환불" in neg and "포장 불만" in neg
+    pos = api.get(f"{API}/stats/keywords/top?polarity=POS&limit=50").json()
+    assert pos and all(k["polarity"] == "POS" for k in pos)
     assert api.get(f"{API}/stats/keywords/top?limit=0").status_code == 422
 
     api.post(f"{API}/reviews/{ids['risky_a']}/blind", json={"reason": "악성"})          # 블라인드 → 집계 제외
-    assert api.get(f"{API}/stats/keywords/top?polarity=NEG").json() == []
+    neg = [k["word"] for k in api.get(f"{API}/stats/keywords/top?polarity=NEG&limit=50").json()]
+    assert "불량" not in neg and "환불" not in neg
 
 
 @pytest.mark.parametrize("query", ["product_ids={a},{b}", "product_ids={a}&product_ids={b}"])

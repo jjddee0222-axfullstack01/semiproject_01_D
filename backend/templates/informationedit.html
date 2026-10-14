@@ -197,6 +197,115 @@
         .btn-save:hover {
             background-color: #333333;
         }
+
+        /* 위험 키워드 관리 */
+        .card + .card {
+            margin-top: 24px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111111;
+            margin-bottom: 6px;
+        }
+
+        .card-guide {
+            font-size: 12px;
+            color: #868E96;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .keyword-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .keyword-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 6px 6px 12px;
+            border: 1px solid #E9ECEF;
+            border-radius: 16px;
+            background-color: #F8F9FA;
+            font-size: 13px;
+            color: #333333;
+        }
+
+        .keyword-chip .weight {
+            font-size: 11px;
+            color: #868E96;
+        }
+
+        .keyword-chip .weight.high {
+            color: #E03131;
+            font-weight: 700;
+        }
+
+        .keyword-chip button {
+            width: 20px;
+            height: 20px;
+            border: none;
+            border-radius: 50%;
+            background: #E9ECEF;
+            color: #495057;
+            font-size: 12px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .keyword-chip button:hover {
+            background: #FFE3E3;
+            color: #E03131;
+        }
+
+        .keyword-add {
+            display: flex;
+            gap: 8px;
+        }
+
+        .keyword-add input,
+        .keyword-add select {
+            height: 40px;
+            padding: 0 12px;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #ffffff;
+            color: #333333;
+        }
+
+        .keyword-add input {
+            flex: 1;
+        }
+
+        .btn-secondary {
+            padding: 0 16px;
+            height: 40px;
+            border: 1px solid #CED4DA;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #111111;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .reanalyze {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid #F1F3F5;
+            font-size: 12px;
+            color: #868E96;
+        }
     </style>
 </head>
 <body>
@@ -250,6 +359,41 @@
                             onclick="if(!document.getElementById('current-pwd').value){alert('탈퇴하려면 현재 비밀번호를 입력해 주세요.');return false;} return confirm('정말 탈퇴하시겠습니까?');">회원 탈퇴</button>
                     <button type="submit" class="btn-save">저장하기</button>
                 </div>
+            </form>
+        </div>
+
+        <!-- 위험 키워드 관리: 리뷰에 이 단어가 있으면 위험도가 올라가 대시보드·CS챗봇 상단에 노출 -->
+        <div class="card" id="risk-keywords">
+            <div class="card-title">위험 키워드 관리</div>
+            <div class="card-guide">
+                리뷰에 아래 단어가 들어 있으면 '위험 리뷰'로 분류됩니다. 위험도 3 이상인 단어는 하나만 있어도 가장 높은 위험도로 분류됩니다.<br>
+                키워드를 바꾼 뒤에는 '기존 리뷰 다시 분석'을 눌러야 이미 들어온 리뷰에도 반영됩니다.
+            </div>
+
+            <div class="keyword-list">
+                {% for kw in risk_keywords|default([]) %}
+                <form class="keyword-chip" method="post" action="{{ url_for('risk_keyword_delete', keyword_id=kw.id) }}">
+                    {{ kw.word }} <span class="weight {{ 'high' if kw.weight >= 3 }}">위험도 {{ kw.weight }}</span>
+                    <button type="submit" title="'{{ kw.word }}' 삭제" aria-label="{{ kw.word }} 삭제">×</button>
+                </form>
+                {% else %}
+                <span class="card-guide">등록된 위험 키워드가 없습니다.</span>
+                {% endfor %}
+            </div>
+
+            <form class="keyword-add" method="post" action="{{ url_for('risk_keyword_add') }}">
+                <input type="text" name="word" maxlength="100" required placeholder="추가할 위험 키워드 (예: 유통기한)" aria-label="위험 키워드">
+                <select name="weight" aria-label="위험도">
+                    <option value="1">위험도 1 (낮음)</option>
+                    <option value="2" selected>위험도 2 (보통)</option>
+                    <option value="3">위험도 3 (높음)</option>
+                </select>
+                <button type="submit" class="btn-save">추가</button>
+            </form>
+
+            <form class="reanalyze" method="post" action="{{ url_for('reanalyze') }}">
+                <span>현재 키워드로 내 상품의 모든 리뷰를 다시 분석합니다.</span>
+                <button type="submit" class="btn-secondary">기존 리뷰 다시 분석</button>
             </form>
         </div>
     </main>

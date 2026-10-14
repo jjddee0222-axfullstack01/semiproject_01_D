@@ -121,6 +121,32 @@ def analyze_review(content: str, rating: int, risk_keywords: Iterable[tuple[str,
 
 
 # ──────────────────────────────────────────────
+# 키워드 추출 (keywords / review_keywords → 키워드 TOP 10)
+#   항목 + 감성: '배송 만족', '포장 불만' …  / 위험 키워드: '환불', '불량' … (부정)
+#   같은 단어는 항상 같은 극성이 되도록 '만족'/'불만'을 붙인다 (keywords.word 는 UNIQUE)
+# ──────────────────────────────────────────────
+POSITIVE_ONLY_ASPECTS = {"재구매·추천"}     # '재구매·추천 불만' 같은 어색한 키워드는 만들지 않음
+
+
+def extract_keywords(content: str, sentiment: Polarity,
+                     risk_keywords: Iterable[tuple[str, int]]) -> list[tuple[str, Polarity, float]]:
+    """리뷰 1건 → [(키워드, 극성, 점수)]. 점수는 리뷰 안에서의 중요도(0~1)"""
+    result: dict[str, tuple[Polarity, float]] = {}
+    polarity = Polarity.POS if sentiment == Polarity.POS else Polarity.NEG
+    suffix = "만족" if polarity == Polarity.POS else "불만"
+    for aspect in aspects_in(content):
+        if polarity == Polarity.NEG and aspect in POSITIVE_ONLY_ASPECTS:
+            continue
+        result[f"{aspect} {suffix}"] = (polarity, 0.5)
+
+    text = _strip_negations(content)
+    for word, weight in risk_keywords:
+        if word and word in text:
+            result[word] = (Polarity.NEG, round(min(weight, 3) / 3, 2))
+    return [(w, pol, score) for w, (pol, score) in result.items()]
+
+
+# ──────────────────────────────────────────────
 # 긍정 / 부정 리뷰 요약 (상품별 대시보드)
 # ──────────────────────────────────────────────
 def _top_aspects(contents: list[str], limit: int = 3) -> list[str]:

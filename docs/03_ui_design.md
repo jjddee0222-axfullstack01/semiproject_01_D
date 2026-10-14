@@ -1,3 +1,49 @@
-# UI 설계(FIGMA)
+# UI 설계
 
-https://www.figma.com/design/MHMdmt55vmKb10IicXSK1E/%EC%A0%9C%EB%AA%A9-%EC%97%86%EC%9D%8C?node-id=0-1&t=v7oITTnxlGeynka0-1
+- Figma: https://www.figma.com/design/MHMdmt55vmKb10IicXSK1E/%EC%A0%9C%EB%AA%A9-%EC%97%86%EC%9D%8C?node-id=0-1&t=v7oITTnxlGeynka0-1
+- 시안(정적 HTML): `frontend/` · 실제 서비스 화면: `backend/templates/` (시안을 고치면 템플릿에도 반영)
+
+## 1. 화면 목록 (10개)
+
+| # | 화면 | 시안 파일 → 실제 템플릿 | 주소 | 주요 요소 | 관련 요구사항 |
+|---|---|---|---|---|---|
+| 1 | 로그인 | index.html → index.html | `/login` | 이메일·비밀번호, 회원가입·비밀번호 찾기 링크 | US-02 |
+| 2 | 회원가입 | joinmembership.html → joinmembership.html | `/signup` | 이름·이메일·비밀번호(규칙)·쇼핑몰명·플랫폼·사업자번호 | US-01 |
+| 3 | 대시보드 | dashboard.html → dashboard.html | `/dashboard` | 위험 리뷰 경고, 최근 리뷰 3개, 당월 방문자·구매자 | US-15 |
+| 4 | 상품 조회 | productresearch.html → products.html | `/products` | 상품 검색, 상품 카드(평점·리뷰 수·긍/부정·위험) | US-05, 누락 기능(상품 검색) |
+| 5 | 상품별 대시보드 | productdashboard.html → productdashboard.html | `/products/{id}` | 상세 리뷰 + 블라인드(사유 입력)·복구, 월별 리뷰 추이 차트, 긍정·부정 요약 | US-05, US-06, US-12 |
+| 6 | 쇼핑몰 분석 | analysis.html → analysis.html | `/analysis` | 지표 4개, 리뷰 통계 차트 4개(상품·기간 필터), CSV 내보내기, AI 분석 리포트, 칭찬·불만 리뷰, 운영 특이 사항 | US-12~14, 누락 기능(CSV) |
+| 7 | CS챗봇 | cschatbot.html → cschatbot.html | `/cschatbot` | 답글 없는 리뷰(위험도순) + 추천 답글 수정·복사·처리 완료·되돌리기 | US-07, US-15, US-16 |
+| 8 | 설정 | informationedit.html → informationedit.html | `/settings` | 회원정보 수정·탈퇴, 위험 키워드 관리·재분석 | US-04, 누락 기능(위험 키워드) |
+| 9 | 의견 보내기 | sendfeedback.html → sendfeedback.html | `/feedback` | 불편 사항·제안 입력 | - |
+| 10 | 404 | 404page.html → 404page.html | 없는 주소 | 안내 문구, 처음으로 돌아가기 | 예외 화면 |
+
+공통: 왼쪽 사이드바(대시보드·상품 조회·분석·CS챗봇 / 설정·의견 보내기·로그아웃), 상단 안내 메시지(성공=초록, 오류=빨강).
+
+## 2. 화면 흐름
+
+```
+로그인 ─┬─ 회원가입 → 로그인
+        └─ 대시보드 ─┬─ 상품 조회 → 상품별 대시보드 (블라인드·복구)
+                     ├─ 쇼핑몰 분석 → (위험 리뷰) CS챗봇
+                     ├─ CS챗봇 → 상품 바로가기 → 상품별 대시보드
+                     ├─ 설정 (위험 키워드 → 재분석)
+                     └─ 의견 보내기
+```
+
+## 3. 상태별 화면 (예외 화면)
+
+| 상황 | 표시 |
+|---|---|
+| 로그인 안 함 | 로그인 화면으로 이동 + "로그인이 필요합니다." |
+| 데이터 없음 | 리뷰·상품·검색 결과·차트마다 "…이 없습니다" 문구 |
+| 남의 상품·리뷰 주소 | 404 화면 (존재 여부를 알려 주지 않음) |
+| 입력 오류 | 같은 화면에 빨간 안내 + 입력값 유지 |
+| 차트 로딩 / 실패 | "불러오는 중…" / "통계를 불러오지 못했습니다." / 차트 라이브러리를 못 불러오면 같은 데이터를 표로 표시 |
+| 되돌릴 수 있는 작업 | 블라인드 → '복구', CS챗봇 처리 완료 → '되돌리기' |
+
+## 4. 차트 규칙
+
+- 데이터는 같은 서버의 REST API(`/api/v1/stats/*`)를 fetch 로 불러와 ECharts 로 그림
+- 긍정 = 파랑, 부정 = 빨강, 중립 = 회색 (색약 사용자도 구분되는 조합. 범례·숫자 라벨 함께 표시)
+- 리뷰 수와 평균 평점은 단위가 달라 **차트를 따로** 그림 (한 차트에 축 두 개를 쓰지 않음)

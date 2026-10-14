@@ -332,6 +332,126 @@
         .summary-box.negative {
             border-left: 4px solid #FA5252;
         }
+
+        /* 리뷰 블라인드 (US-06) */
+        .review-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: #888888;
+        }
+
+        .review-tools {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .blind-toggle summary {
+            list-style: none;
+            cursor: pointer;
+            font-size: 11px;
+            color: #868E96;
+            text-decoration: underline;
+        }
+
+        .blind-toggle summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .blind-toggle[open] summary {
+            color: #E03131;
+        }
+
+        .blind-form {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .blind-form input {
+            flex: 1;
+            height: 32px;
+            padding: 0 10px;
+            border: 1px solid #DEE2E6;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .btn-blind,
+        .btn-restore {
+            height: 32px;
+            padding: 0 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-blind {
+            border: none;
+            background-color: #E03131;
+            color: #ffffff;
+        }
+
+        .btn-restore {
+            border: 1px solid #CED4DA;
+            background-color: #ffffff;
+            color: #111111;
+        }
+
+        .blind-help {
+            margin-top: 6px;
+            font-size: 11px;
+            color: #868E96;
+        }
+
+        .blinded-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            background-color: #F8F9FA;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #868E96;
+        }
+
+        .blinded-item .content {
+            color: #555555;
+            text-decoration: line-through;
+            margin: 4px 0;
+        }
+
+        /* 월별 리뷰 추이 차트 */
+        .chart {
+            height: 200px;
+        }
+
+        .chart-msg {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #868E96;
+        }
+
+        .chart-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .chart-table th,
+        .chart-table td {
+            padding: 4px 6px;
+            border-bottom: 1px solid #F1F3F5;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
@@ -377,17 +497,48 @@
                             {% for review in reviews %}
                             {% set risky = review.analysis and review.analysis.severity >= RISK_SEVERITY %}
                             <div class="review-item"{% if risky %} style="border-left:3px solid #FA5252;"{% endif %}>
-                                <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px;color:#888888;">
+                                <div class="review-head">
                                     <span>{{ (review.reviewer_name or "익명")|mask_name }} 고객님 · ★ {{ review.rating }}{% if risky %} <b style="color:#FA5252;">위험</b>{% endif %}</span>
-                                    <span>{{ review.reviewed_at|dotdate }}</span>
+                                    <span class="review-tools">
+                                        <span>{{ review.reviewed_at|dotdate }}</span>
+                                    </span>
                                 </div>
                                 "{{ review.content_raw }}"
+                                <!-- 근거 없는 악성 리뷰 블라인드: 사유 필수, 통계·위험 리뷰·키워드 집계에서 제외 -->
+                                <details class="blind-toggle" style="margin-top:8px;">
+                                    <summary>블라인드</summary>
+                                    <form class="blind-form" method="post" action="{{ url_for('review_blind', review_id=review.id) }}">
+                                        <input type="text" name="reason" maxlength="500" required placeholder="블라인드 사유를 입력하세요 (필수)">
+                                        <button type="submit" class="btn-blind">블라인드 처리</button>
+                                    </form>
+                                    <div class="blind-help">블라인드한 리뷰는 목록과 통계에서 빠지며, 아래 '블라인드된 리뷰'에서 언제든 복구할 수 있습니다.</div>
+                                </details>
                             </div>
                             {% else %}
                             <div class="review-item">아직 등록된 리뷰가 없습니다.</div>
                             {% endfor %}
                         </div>
                     </div>
+
+                    {% if blinded_reviews %}
+                    <div class="card">
+                        <div class="card-title">블라인드된 리뷰 ({{ blinded_reviews|length }})</div>
+                        <div class="review-list">
+                            {% for review in blinded_reviews %}
+                            <div class="blinded-item">
+                                <div>
+                                    <div>{{ (review.reviewer_name or "익명")|mask_name }} 고객님 · ★ {{ review.rating }} · {{ review.reviewed_at|dotdate }}</div>
+                                    <div class="content">"{{ review.content_raw }}"</div>
+                                    <div>사유: {{ review.blind_reason }}{% if review.blinded_at %} · {{ review.blinded_at|dotdate }} 처리{% endif %}</div>
+                                </div>
+                                <form method="post" action="{{ url_for('review_restore', review_id=review.id) }}">
+                                    <button type="submit" class="btn-restore">복구</button>
+                                </form>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
 
                 <!-- 오른쪽 영역: 쇼핑몰 간단 분석 / 평균 평점 / 긍정·부정 리뷰 요약 -->
@@ -408,6 +559,11 @@
                     </div>
 
                     <div class="card" style="margin-bottom: 0;">
+                        <div class="card-title">월별 리뷰 추이</div>
+                        <div class="chart" id="chart-product-monthly"></div>
+                    </div>
+
+                    <div class="card" style="margin-bottom: 0;">
                         <div class="card-title">긍정 리뷰 요약</div>
                         <div class="summary-box positive">
                             {{ positive_summary }}
@@ -425,6 +581,11 @@
         </div>
 
     </main>
+
+    {% include '_charts.html' %}
+    <script>
+        PP.monthlyCount(document.getElementById("chart-product-monthly"), { product_id: {{ product.id }} });
+    </script>
 
 </body>
 </html>

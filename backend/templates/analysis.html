@@ -243,6 +243,90 @@
             margin-bottom: 2px;
         }
 
+        /* 리뷰 통계 (차트) */
+        .stats-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .stats-toolbar .card-title {
+            margin: 0 auto 0 0;
+        }
+
+        .stats-toolbar select,
+        .btn-export {
+            height: 32px;
+            padding: 0 10px;
+            border: 1px solid #DEE2E6;
+            border-radius: 6px;
+            background-color: #ffffff;
+            font-size: 12px;
+            color: #333333;
+        }
+
+        .btn-export {
+            display: inline-flex;
+            align-items: center;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .btn-export:hover {
+            border-color: #111111;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .chart-box {
+            border: 1px solid #F1F3F5;
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+
+        .chart-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #555555;
+            margin-bottom: 4px;
+        }
+
+        .chart {
+            height: 240px;
+        }
+
+        .chart.tall {
+            height: 300px;
+        }
+
+        .chart-msg {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #868E96;
+        }
+
+        .chart-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .chart-table th,
+        .chart-table td {
+            padding: 4px 6px;
+            border-bottom: 1px solid #F1F3F5;
+            text-align: left;
+        }
+
         .issue-list {
             list-style: none;
             display: flex;
@@ -292,6 +376,44 @@
                 <div class="stat-value">{{ "%.1f"|format(avg_rating) }} / 5.0</div>
                 <div class="stat-sub">리뷰 {{ review_count }}개 기준</div>
                 {% endif %}
+            </div>
+        </div>
+
+        <!-- 리뷰 통계: 월별 추이 / 긍정·부정 비율 / 키워드 TOP 10 (US-12~14) + CSV 내보내기 -->
+        <div class="card">
+            <div class="stats-toolbar">
+                <div class="card-title">리뷰 통계</div>
+                <select id="f-product" aria-label="상품 선택">
+                    <option value="">전체 상품</option>
+                    {% for p in products %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+                </select>
+                <select id="f-period" aria-label="기간 선택">
+                    <option value="">전체 기간</option>
+                    <option value="7">최근 7일</option>
+                    <option value="30">최근 30일</option>
+                    <option value="90">최근 3개월</option>
+                    <option value="365">최근 1년</option>
+                </select>
+                <a class="btn-export" id="export-stats" href="/api/v1/exports/stats.csv">통계 CSV</a>
+                <a class="btn-export" id="export-reviews" href="/api/v1/exports/reviews.csv">리뷰 CSV</a>
+            </div>
+            <div class="chart-grid">
+                <div class="chart-box">
+                    <div class="chart-title">월별 리뷰 수</div>
+                    <div class="chart" id="chart-monthly-count"></div>
+                </div>
+                <div class="chart-box">
+                    <div class="chart-title">월별 평균 평점</div>
+                    <div class="chart" id="chart-monthly-rating"></div>
+                </div>
+                <div class="chart-box">
+                    <div class="chart-title">긍정 / 부정 비율</div>
+                    <div class="chart tall" id="chart-sentiment"></div>
+                </div>
+                <div class="chart-box">
+                    <div class="chart-title">키워드 TOP 10</div>
+                    <div class="chart tall" id="chart-keywords"></div>
+                </div>
             </div>
         </div>
 
@@ -360,6 +482,24 @@
             </div>
         </div>
     </main>
+
+    {% include '_charts.html' %}
+    <script>
+        // 필터(상품·기간)가 바뀌면 차트 4개와 CSV 링크를 같은 조건으로 갱신
+        function refreshStats() {
+            const params = { product_id: document.getElementById("f-product").value,
+                             ...PP.period(document.getElementById("f-period").value) };
+            PP.monthlyCount(document.getElementById("chart-monthly-count"), params);
+            PP.monthlyRating(document.getElementById("chart-monthly-rating"), params);
+            PP.sentiment(document.getElementById("chart-sentiment"), params);
+            PP.keywords(document.getElementById("chart-keywords"), params);
+            document.getElementById("export-stats").href = PP.API + "/exports/stats.csv" + PP.query(params);
+            document.getElementById("export-reviews").href = PP.API + "/exports/reviews.csv" + PP.query(params);
+        }
+        document.getElementById("f-product").addEventListener("change", refreshStats);
+        document.getElementById("f-period").addEventListener("change", refreshStats);
+        refreshStats();
+    </script>
 
 </body>
 </html>

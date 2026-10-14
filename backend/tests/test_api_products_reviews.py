@@ -61,7 +61,8 @@ def test_review_list_and_filters(api, ids):
 def test_review_detail(api, other_api, ids):
     d = api.get(f"{API}/reviews/{ids['risky_a']}").json()
     assert d["analysis"]["severity"] == 3 and d["analysis"]["issue_type"] == "PRODUCT"
-    assert d["content_clean"] and d["replies"] == [] and d["keywords"] == []
+    assert d["content_clean"] and d["replies"] == []
+    assert {k["word"] for k in d["keywords"]} >= {"불량", "환불"}               # 분석 시 자동 추출
     assert "content_embedding" not in d
     assert error_code(api.get(f"{API}/reviews/99999")) == "REVIEW_NOT_FOUND"
     assert other_api.get(f"{API}/reviews/{ids['risky_a']}").status_code == 403

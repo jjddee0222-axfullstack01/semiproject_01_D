@@ -9,16 +9,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 try:
-    from .analysis import DEFAULT_RISK_KEYWORDS, MODEL_VERSION, analyze_review, clean_text
+    from .analysis import (DEFAULT_RISK_KEYWORDS, MODEL_VERSION, analyze_review, clean_text,
+                            extract_keywords)
     from .db import SessionLocal, create_tables
-    from .models import (MallPlatform, Product, ProductMonthlyStat, Review, ReviewAnalysis,
-                         RiskKeyword, ShopMonthlyStat, User)
+    from .models import (Keyword, MallPlatform, Product, ProductMonthlyStat, Review, ReviewAnalysis,
+                         ReviewKeyword, RiskKeyword, ShopMonthlyStat, User)
     from .security import hash_password
 except ImportError:
-    from analysis import DEFAULT_RISK_KEYWORDS, MODEL_VERSION, analyze_review, clean_text
+    from analysis import (DEFAULT_RISK_KEYWORDS, MODEL_VERSION, analyze_review, clean_text,
+                           extract_keywords)
     from db import SessionLocal, create_tables
-    from models import (MallPlatform, Product, ProductMonthlyStat, Review, ReviewAnalysis,
-                        RiskKeyword, ShopMonthlyStat, User)
+    from models import (Keyword, MallPlatform, Product, ProductMonthlyStat, Review, ReviewAnalysis,
+                        ReviewKeyword, RiskKeyword, ShopMonthlyStat, User)
     from security import hash_password
 
 
@@ -55,7 +57,21 @@ def analyze_and_save(db: Session, review: Review, risk_keywords: list[tuple[str,
     analysis.issue_type = result.issue_type
     analysis.model_version = MODEL_VERSION
     db.add(analysis)
+    _save_keywords(db, review, extract_keywords(review.content_raw, result.sentiment, risk_keywords))
     return analysis
+
+
+def _save_keywords(db: Session, review: Review, found: list) -> None:
+    """리뷰의 키워드 매핑을 새로 저장 (재분석 시 기존 매핑은 교체). 키워드 사전(keywords)은 없으면 추가"""
+    review.keyword_links.clear()
+    for word, polarity, score in found:
+        # 아직 DB 에 저장 전(같은 작업 안에서 방금 만든) 키워드도 재사용 (autoflush=False 대비)
+        keyword = next((k for k in db.new if isinstance(k, Keyword) and k.word == word), None) \
+            or db.scalar(select(Keyword).where(Keyword.word == word))
+        if keyword is None:
+            keyword = Keyword(word=word, polarity=polarity)
+            db.add(keyword)
+        review.keyword_links.append(ReviewKeyword(keyword=keyword, score=score))
 
 
 def init_db() -> None:

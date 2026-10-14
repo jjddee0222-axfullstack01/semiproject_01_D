@@ -1,21 +1,24 @@
-#pycache 폴더 제외
-backend/__pycache__/
+# ── 파이썬 캐시 (모든 폴더)
+__pycache__/
+*.py[cod]
 
-#db 폴더 제외
-backend/instance/pinpoint.db
-
-#환경 설정(DB 비밀번호) 제외
-backend/.env
-
-#로컬 DB 파일 폴더 제외
-backend/instance/
-
-#venv 폴더 제외
-venv
-backend/.env.example
-
-#테스트 캐시 제외
+# ── 테스트 캐시
 .pytest_cache/
 
-#venv 폴더 제외
-venv
+# ── 가상환경
+venv/
+.venv/
+
+# ── 비밀 정보: 실제 DB 비밀번호 등은 .env 에만 둔다
+#    (.env.example 은 팀원이 복사해서 쓰는 '양식'이므로 커밋한다)
+backend/.env
+.env
+
+# ── 로컬 DB 파일 (SQLite 시절 파일 포함)
+backend/instance/
+
+# ── 편집기 / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,150 @@
+{# 통계 차트 공통 스크립트 (analysis.html, productdashboard.html 에서 include)
+   - 데이터: 같은 출처의 REST API /api/v1/stats/* 를 fetch (로그인 세션 쿠키가 자동으로 함께 전송됨)
+   - 차트: ECharts (CDN). 불러오지 못하면 같은 데이터를 표로 보여 줌
+#}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script>
+const PP = (() => {
+    const API = "/api/v1";
+    const COLOR = { bar: "#495057", line: "#343A40", POS: "#1C7ED6", NEG: "#E03131", NEU: "#ADB5BD",   // 긍정·부정: 색약에도 구분되는 파랑·빨강
+                    ink: "#333333", muted: "#868E96", grid: "#F1F3F5" };
+    const LABEL = { POS: "긍정", NEG: "부정", NEU: "중립" };
+    const charts = {};
+
+    function query(params) {
+        const q = new URLSearchParams();
+        Object.entries(params || {}).forEach(([k, v]) => { if (v !== "" && v != null) q.set(k, v); });
+        const s = q.toString();
+        return s ? "?" + s : "";
+    }
+
+    async function get(path, params) {
+        const res = await fetch(API + path + query(params), { credentials: "same-origin" });
+        if (res.status === 401) { location.href = "{{ url_for('login') }}"; throw new Error("401"); }
+        if (!res.ok) throw new Error(res.status);
+        return res.json();
+    }
+
+    // 상태 문구 (로딩 / 데이터 없음 / 오류) — 차트 대신 표시
+    function message(el, text) {
+        if (charts[el.id]) { charts[el.id].dispose(); delete charts[el.id]; }
+        el.innerHTML = `<div class="chart-msg">${text}</div>`;
+    }
+
+    // ECharts 를 못 불러온 경우(오프라인 등) 같은 데이터를 표로
+    function table(el, head, rows) {
+        el.innerHTML = `<table class="chart-table"><thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead>`
+            + `<tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    }
+
+    function draw(el, option) {
+        if (!charts[el.id]) { el.innerHTML = ""; charts[el.id] = echarts.init(el); }
+        charts[el.id].setOption(option, true);
+    }
+
+    const axisStyle = {
+        axisLine: { lineStyle: { color: "#DEE2E6" } }, axisTick: { show: false },
+        axisLabel: { color: COLOR.muted, fontSize: 11 }, splitLine: { lineStyle: { color: COLOR.grid } },
+    };
+    const tooltipStyle = { backgroundColor: "#ffffff", borderColor: "#E9ECEF", textStyle: { color: COLOR.ink, fontSize: 12 } };
+    const monthLabel = (m) => `${m.slice(2, 4)}.${m.slice(5, 7)}`;          // '2026-10' → '26.10'
+
+    // 월별 리뷰 수 (막대)
+    async function monthlyCount(el, params) {
+        message(el, "불러오는 중…");
+        try {
+            const data = await get("/stats/monthly-trend", params);
+            if (!data.length) return message(el, "해당 기간의 리뷰가 없습니다.");
+            if (!window.echarts) return table(el, ["월", "리뷰 수", "평균 평점"], data.map(d => [d.month, d.count, d.avg_rating.toFixed(1)]));
+            draw(el, {
+                grid: { left: 36, right: 12, top: 16, bottom: 28 },
+                tooltip: { ...tooltipStyle, trigger: "axis", axisPointer: { type: "shadow" },
+                           formatter: (p) => `${data[p[0].dataIndex].month}<br>리뷰 <b>${p[0].value}건</b> · 평균 ★ ${data[p[0].dataIndex].avg_rating.toFixed(1)}` },
+                xAxis: { type: "category", data: data.map(d => monthLabel(d.month)), ...axisStyle, splitLine: { show: false } },
+                yAxis: { type: "value", minInterval: 1, ...axisStyle, axisLine: { show: false } },
+                series: [{ type: "bar", data: data.map(d => d.count), barMaxWidth: 28,
+                           itemStyle: { color: COLOR.bar, borderRadius: [4, 4, 0, 0] } }],
+            });
+        } catch (e) { if (e.message !== "401") message(el, "통계를 불러오지 못했습니다."); }
+    }
+
+    // 월별 평균 평점 (선) — 리뷰 수와 단위가 달라 차트를 따로 둔다 (이중 축 사용 안 함)
+    async function monthlyRating(el, params) {
+        message(el, "불러오는 중…");
+        try {
+            const data = await get("/stats/monthly-trend", params);
+            if (!data.length) return message(el, "해당 기간의 리뷰가 없습니다.");
+            if (!window.echarts) return table(el, ["월", "평균 평점"], data.map(d => [d.month, d.avg_rating.toFixed(1)]));
+            draw(el, {
+                grid: { left: 36, right: 16, top: 16, bottom: 28 },
+                tooltip: { ...tooltipStyle, trigger: "axis",
+                           formatter: (p) => `${data[p[0].dataIndex].month}<br>평균 ★ <b>${p[0].value.toFixed(2)}</b> (리뷰 ${data[p[0].dataIndex].count}건)` },
+                xAxis: { type: "category", data: data.map(d => monthLabel(d.month)), boundaryGap: data.length === 1, ...axisStyle, splitLine: { show: false } },
+                yAxis: { type: "value", min: 0, max: 5, interval: 1, ...axisStyle, axisLine: { show: false } },
+                series: [{ type: "line", data: data.map(d => d.avg_rating), symbol: "circle", symbolSize: 8,
+                           lineStyle: { width: 2, color: COLOR.line }, itemStyle: { color: COLOR.line, borderColor: "#fff", borderWidth: 2 } }],
+            });
+        } catch (e) { if (e.message !== "401") message(el, "통계를 불러오지 못했습니다."); }
+    }
+
+    // 긍정/부정 비율 (도넛) + 가운데 총 건수
+    async function sentiment(el, params) {
+        message(el, "불러오는 중…");
+        try {
+            const data = await get("/stats/sentiment-ratio", params);
+            const items = data.items.filter(i => i.count > 0);
+            if (!data.total) return message(el, "분석된 리뷰가 없습니다.");
+            if (!window.echarts) return table(el, ["구분", "건수", "비율"], items.map(i => [LABEL[i.sentiment], i.count, (i.ratio * 100).toFixed(1) + "%"]));
+            draw(el, {
+                tooltip: { ...tooltipStyle, trigger: "item", formatter: (p) => `${p.name} <b>${p.value}건</b> (${p.percent}%)` },
+                legend: { bottom: 0, icon: "circle", itemWidth: 8, itemHeight: 8, textStyle: { color: COLOR.ink, fontSize: 12 } },
+                title: { text: `${data.total}`, subtext: "분석된 리뷰", left: "center", top: "34%",
+                         textStyle: { fontSize: 20, fontWeight: 700, color: COLOR.ink }, subtextStyle: { fontSize: 11, color: COLOR.muted } },
+                series: [{ type: "pie", radius: ["52%", "72%"], center: ["50%", "44%"], avoidLabelOverlap: true,
+                           itemStyle: { borderColor: "#fff", borderWidth: 2 },
+                           label: { formatter: (p) => `${p.percent.toFixed(0)}%`, color: COLOR.ink, fontSize: 12 },
+                           data: items.map(i => ({ name: LABEL[i.sentiment], value: i.count, itemStyle: { color: COLOR[i.sentiment] } })) }],
+            });
+        } catch (e) { if (e.message !== "401") message(el, "통계를 불러오지 못했습니다."); }
+    }
+
+    // 키워드 TOP 10 (가로 막대, 긍정=파랑 / 부정=빨강)
+    async function keywords(el, params) {
+        message(el, "불러오는 중…");
+        try {
+            const data = await get("/stats/keywords/top", { ...params, limit: 10 });
+            if (!data.length) return message(el, "추출된 키워드가 없습니다.");
+            if (!window.echarts) return table(el, ["순위", "키워드", "구분", "리뷰 수"], data.map(k => [k.rank, k.word, LABEL[k.polarity], k.count]));
+            const rows = [...data].reverse();                      // 1위가 맨 위로 오도록
+            draw(el, {
+                grid: { left: 96, right: 28, top: 8, bottom: 28 },
+                legend: { bottom: 0, icon: "circle", itemWidth: 8, itemHeight: 8, textStyle: { color: COLOR.ink, fontSize: 12 },
+                          data: [{ name: "긍정", itemStyle: { color: COLOR.POS } }, { name: "부정", itemStyle: { color: COLOR.NEG } }] },
+                tooltip: { ...tooltipStyle, trigger: "item", formatter: (p) => `${p.name}<br>${p.seriesName} · 리뷰 <b>${p.value}건</b>` },
+                xAxis: { type: "value", minInterval: 1, ...axisStyle, axisLine: { show: false } },
+                yAxis: { type: "category", data: rows.map(k => k.word), ...axisStyle, axisLabel: { color: COLOR.ink, fontSize: 12 } },
+                series: ["POS", "NEG"].map(pol => ({
+                    name: LABEL[pol], type: "bar", stack: "k", barMaxWidth: 16,
+                    itemStyle: { color: COLOR[pol], borderRadius: [0, 4, 4, 0] },
+                    label: { show: true, position: "right", color: COLOR.muted, fontSize: 11, formatter: (p) => p.value || "" },
+                    data: rows.map(k => (k.polarity === pol ? k.count : null)),
+                })),
+            });
+        } catch (e) { if (e.message !== "401") message(el, "통계를 불러오지 못했습니다."); }
+    }
+
+    // 기간 선택값(일) → {from, to}
+    function period(days) {
+        if (!days) return {};
+        // 한국 시간 기준 날짜 (toISOString 은 UTC 라 오전 9시 전에는 하루 전 날짜가 됨)
+        const pad = (n) => String(n).padStart(2, "0");
+        const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const to = new Date(), from = new Date();
+        from.setDate(to.getDate() - Number(days) + 1);
+        return { from: fmt(from), to: fmt(to) };
+    }
+
+    window.addEventListener("resize", () => Object.values(charts).forEach(c => c.resize()));
+    return { monthlyCount, monthlyRating, sentiment, keywords, period, query, API };
+})();
+</script>

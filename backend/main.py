@@ -29,29 +29,31 @@ from starlette.middleware.sessions import SessionMiddleware
 
 # backend 폴더 안에서 실행(main:app)하든, 최상위 폴더에서 실행(backend.main:app)하든 동작
 try:
-    from .analysis import RISK_SEVERITY, summarize_reviews
+    from .analysis import RISK_SEVERITY, shop_report, summarize_reviews
     from .api_v1 import setup_api
     from .auth import (LoginRequired, clear_cookie, end_all_sessions, end_session,
                        get_current_user, login_required, start_session)
-    from .database import (add_default_risk_keywords, analyze_and_save, init_db,
+    from .database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                            seller_risk_keywords, this_month)
     from .db import describe_db, get_session
     from .models import (Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                         ReviewAnalysis, ReviewStatus, ShopMonthlyStat, User,
+                         ReviewAnalysis, ReviewReply, ReviewStatus, ShopMonthlyStat, User,
                          UserStatus, visible_reviews)
+    from .reply_drafts import generate_reply_draft
     from .schemas import ReviewCreate, ReviewCreateResult
     from .security import hash_password, verify_password
 except ImportError:
-    from analysis import RISK_SEVERITY, summarize_reviews
+    from analysis import RISK_SEVERITY, shop_report, summarize_reviews
     from api_v1 import setup_api
     from auth import (LoginRequired, clear_cookie, end_all_sessions, end_session,
                       get_current_user, login_required, start_session)
-    from database import (add_default_risk_keywords, analyze_and_save, init_db,
+    from database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                           seller_risk_keywords, this_month)
     from db import describe_db, get_session
     from models import (Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                        ReviewAnalysis, ReviewStatus, ShopMonthlyStat, User,
+                        ReviewAnalysis, ReviewReply, ReviewStatus, ShopMonthlyStat, User,
                         UserStatus, visible_reviews)
+    from reply_drafts import generate_reply_draft
     from schemas import ReviewCreate, ReviewCreateResult
     from security import hash_password, verify_password
 
@@ -323,6 +325,121 @@ def product_dashboard(request: Request,
                   product=product, reviews=reviews, risky_count=risky_count,
                   avg_rating=avg_rating, monthly_buyers=stat.buyers if stat else 0,
                   positive_summary=positive_summary, negative_summary=negative_summary)
+
+
+# ──────────────────────────────────────────────
+# 쇼핑몰 분석  (analysis.html)
+# ──────────────────────────────────────────────
+def purchase_rate(stat) -> Optional[float]:
+    """구매율(%) = 구매자 수 / 방문자 수 × 100. 데이터가 없으면 None"""
+    if stat is None or not stat.visitors:
+        return None
+    return stat.buyers / stat.visitors * 100
+
+
+@app.get("/analysis", name="analysis", response_class=HTMLResponse)
+def analysis_page(request: Request,
+                  user: User = Depends(login_required),
+                  db: Session = Depends(get_session)):
+    """쇼핑몰 전체 분석 — 당월 방문자·구매자 / 전월 대비 구매율 / 평균 평점 / AI 분석 리포트 / 칭찬·불만 리뷰"""
+    reviews = db.scalars(
+        visible_reviews().join(Review.product)
+        .where(Product.seller_id == user.id)
+        .options(selectinload(Review.analysis), selectinload(Review.product))
+        .order_by(Review.reviewed_at.desc(), Review.id.desc())
+    ).all()
+
+    stat = db.get(ShopMonthlyStat, (user.id, this_month()))
+    rate_now, rate_prev = purchase_rate(stat), purchase_rate(db.get(ShopMonthlyStat, (user.id, last_month())))
+    # 전월 대비 구매율 변화율(%). 전월 데이터가 없으면 None → 화면에 '전월 데이터 없음'
+    rate_change = (rate_now / rate_prev - 1) * 100 if rate_now is not None and rate_prev else None
+
+    analyzed = [r for r in reviews if r.analysis]
+    praise = sorted((r for r in analyzed if r.analysis.sentiment == Polarity.POS),
+                    key=lambda r: (-r.rating, -r.reviewed_at.toordinal()))[:3]
+    complaints = sorted((r for r in analyzed if r.analysis.sentiment == Polarity.NEG),
+                        key=lambda r: (-r.analysis.severity, -r.reviewed_at.toordinal()))[:3]
+    positive_summary, negative_summary = summarize_reviews(reviews)
+
+    unreplied_risky = db.scalar(
+        visible_reviews().join(Review.product).join(Review.analysis)
+        .where(Product.seller_id == user.id, ReviewAnalysis.severity >= RISK_SEVERITY, ~Review.replies.any())
+        .with_only_columns(func.count(Review.id))
+    )
+    blinded_count = db.scalar(
+        select(func.count(Review.id)).join(Review.product)
+        .where(Product.seller_id == user.id, Review.status == ReviewStatus.BLINDED)
+    )
+
+    return render(request, "analysis.html", active_menu="analysis",
+                  stats=stat or {"visitors": 0, "buyers": 0},
+                  rate_now=rate_now, rate_change=rate_change,
+                  avg_rating=sum(r.rating for r in reviews) / len(reviews) if reviews else None,
+                  review_count=len(reviews),
+                  report=shop_report(reviews),
+                  praise=praise, complaints=complaints,
+                  positive_summary=positive_summary, negative_summary=negative_summary,
+                  unreplied_risky=unreplied_risky, blinded_count=blinded_count)
+
+
+# ──────────────────────────────────────────────
+# CS챗봇 — 답글이 없는 리뷰 + 추천 답글  (cschatbot.html)
+# ──────────────────────────────────────────────
+CS_LIST_LIMIT = 30
+REPLY_MAX_LENGTH = 2000      # API(ReplyCreate)와 같은 기준
+
+
+@app.get("/cschatbot", name="cschatbot", response_class=HTMLResponse)
+def cschatbot_page(request: Request,
+                   user: User = Depends(login_required),
+                   db: Session = Depends(get_session)):
+    """아직 답글이 없는 리뷰를 위험도 높은 순 → 최신순으로 보여 주고, 리뷰마다 추천 답글 초안을 붙인다"""
+    unreplied = (visible_reviews().join(Review.product).join(Review.analysis)
+                 .where(Product.seller_id == user.id, ~Review.replies.any()))
+    reviews = db.scalars(
+        unreplied.options(selectinload(Review.analysis), selectinload(Review.product))
+        .order_by(ReviewAnalysis.severity.desc(), Review.reviewed_at.desc(), Review.id.desc())
+        .limit(CS_LIST_LIMIT)
+    ).all()
+    risky_unreplied = db.scalar(
+        unreplied.where(ReviewAnalysis.severity >= RISK_SEVERITY).with_only_columns(func.count(Review.id))
+    )
+    total_unreplied = db.scalar(unreplied.with_only_columns(func.count(Review.id)))
+
+    rows = [{"review": r, "draft": generate_reply_draft(r, user.mall_name)[0]} for r in reviews]
+    return render(request, "cschatbot.html", active_menu="cschatbot", rows=rows,
+                  risky_unreplied=risky_unreplied, total_unreplied=total_unreplied,
+                  list_limit=CS_LIST_LIMIT)
+
+
+@app.post("/cschatbot/replies", name="cschatbot_reply")
+def cschatbot_reply(request: Request,
+                    review_id: str = Form(""),
+                    content: str = Form(""),
+                    user: User = Depends(login_required),
+                    db: Session = Depends(get_session)):
+    """추천 답글(또는 수정한 답글)을 리뷰에 등록 → 등록된 리뷰는 CS챗봇 목록에서 빠진다"""
+    content = content.strip()
+    review = db.get(Review, int(review_id)) if review_id.isdigit() else None
+
+    error = None
+    if review is None or review.product.seller_id != user.id:
+        error = "리뷰를 찾을 수 없습니다."
+    elif review.status == ReviewStatus.BLINDED:
+        error = "블라인드된 리뷰에는 답글을 등록할 수 없습니다."
+    elif not content:
+        error = "답글 내용을 입력해 주세요."
+    elif len(content) > REPLY_MAX_LENGTH:
+        error = f"답글은 {REPLY_MAX_LENGTH:,}자 이하로 입력해 주세요."
+
+    if error:
+        flash(request, error, "error")
+        return redirect(request, "cschatbot")
+
+    db.add(ReviewReply(review_id=review.id, author_id=user.id, content=content))
+    db.commit()
+    flash(request, f"{mask_name(review.reviewer_name or '고객')} 고객님 리뷰에 답글을 등록했습니다.")
+    return redirect(request, "cschatbot")
 
 
 # ──────────────────────────────────────────────

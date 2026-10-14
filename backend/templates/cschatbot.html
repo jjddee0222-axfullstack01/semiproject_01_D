@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIN POINT REVIEW - CS 챗봇</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+        }
+
+        body {
+            background-color: #F5F5F5;
+            display: flex;
+            height: 100vh;
+            color: #333333;
+        }
+
+        /* 사이드바 스타일 */
+        .sidebar {
+            width: 240px;
+            background-color: #ffffff;
+            border-right: 1px solid #E0E0E0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px 16px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-top {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .logo {
+            font-size: 15px;
+            font-weight: 800;
+            color: #111111;
+            padding-left: 4px;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background-color: #F8F9FA;
+            border-radius: 8px;
+        }
+
+        .profile-icon {
+            width: 28px;
+            height: 28px;
+            background-color: #E9ECEF;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .profile-info .shop-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .profile-info .user-email {
+            font-size: 10px;
+            color: #666666;
+        }
+
+        .menu-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .menu-item a {
+            display: block;
+            padding: 10px 12px;
+            font-size: 13px;
+            color: #555555;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .menu-item.active a, .menu-item a:hover {
+            background-color: #F1F3F5;
+            color: #111111;
+            font-weight: 600;
+        }
+
+        .sidebar-bottom {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            border-top: 1px solid #E9ECEF;
+            padding-top: 16px;
+        }
+
+        /* 메인 콘텐츠 영역 */
+        .main-content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+        }
+
+        .page-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: #111111;
+        }
+
+        /* 상단 경고 박스 */
+        .alert-box {
+            background-color: #FFF5F5;
+            border: 1px solid #FFE3E3;
+            border-radius: 8px;
+            padding: 16px 20px;
+            color: #FA5252;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* 메인 컨테이너 카드 */
+        .cs-container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .table-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #E9ECEF;
+            font-weight: 700;
+            font-size: 14px;
+            color: #111111;
+            text-align: center;
+        }
+
+        .cs-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 20px 0;
+            border-bottom: 1px solid #F1F3F5;
+            align-items: center;
+        }
+
+        .cs-row:last-child {
+            border-bottom: none;
+        }
+
+        /* 리뷰 박스 영역 */
+        .review-box {
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .review-box.positive {
+            background-color: #F4FBF7;
+            border: 1px solid #D3F9D8;
+            color: #2B8A3E;
+        }
+
+        .review-box.negative {
+            background-color: #FFF5F5;
+            border: 1px solid #FFE3E3;
+            color: #C92A2A;
+        }
+
+        .review-top-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .product-link {
+            color: #666666;
+            text-decoration: underline;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .product-link:hover {
+            color: #111111;
+        }
+
+        /* 추천 답글 박스 영역 */
+        .reply-box {
+            background-color: #F8F9FA;
+            border: 1px solid #E9ECEF;
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 13px;
+            color: #333333;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .reply-content {
+            line-height: 1.4;
+        }
+
+        .reply-footer {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .btn-register {
+            background-color: #111111;
+            color: #ffffff;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-register:hover {
+            background-color: #333333;
+        }
+
+        .reply-box form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .reply-content {
+            width: 100%;
+            min-height: 120px;
+            padding: 10px;
+            border: 1px solid #DEE2E6;
+            border-radius: 6px;
+            background-color: #ffffff;
+            font-size: 13px;
+            color: #333333;
+            resize: vertical;
+        }
+
+        .reply-content:focus {
+            outline: none;
+            border-color: #868E96;
+        }
+
+        .review-date {
+            font-size: 11px;
+            color: #868E96;
+        }
+
+        .empty-box {
+            padding: 40px 0;
+            text-align: center;
+            font-size: 13px;
+            color: #868E96;
+        }
+
+        .list-note {
+            margin-top: 12px;
+            font-size: 11px;
+            color: #868E96;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    {% include '_sidebar.html' %}
+
+    <!-- 메인 CS 챗봇 화면 -->
+    <main class="main-content">
+        <h1 class="page-title">CS챗봇</h1>
+        {% include '_flash.html' %}
+
+        {% if risky_unreplied %}
+        <div class="alert-box">
+            ⚠️ 답글을 달아야 할 위험 리뷰가 {{ risky_unreplied }}건 있습니다.
+        </div>
+        {% endif %}
+
+        <div class="cs-container">
+            <div class="table-header">
+                <div>리뷰</div>
+                <div>추천 답글</div>
+            </div>
+
+            {% for row in rows %}
+            {% set r = row.review %}
+            {% set positive = r.analysis.sentiment.value == 'POS' %}
+            <div class="cs-row">
+                <div class="review-box {{ 'positive' if positive else 'negative' }}">
+                    <div class="review-top-info">
+                        <span>[{{ '긍정' if positive else '부정' }} 리뷰]{% if r.analysis.severity >= RISK_SEVERITY %} ⚠️{% endif %} {{ r.product.name }}</span>
+                        <a class="product-link" href="{{ url_for('product_dashboard', product_id=r.product_id) }}">상품 바로가기</a>
+                    </div>
+                    <div class="review-date">★ {{ r.rating }} · {{ r.reviewer_name|mask_name }} · {{ r.reviewed_at|dotdate }}</div>
+                    <div>{{ r.content_raw }}</div>
+                </div>
+                <div class="reply-box">
+                    <form method="post" action="{{ url_for('cschatbot_reply') }}">
+                        <input type="hidden" name="review_id" value="{{ r.id }}">
+                        <!-- 추천 답글을 그대로 쓰거나 고쳐서 등록 -->
+                        <textarea class="reply-content" name="content" maxlength="2000" required>{{ row.draft }}</textarea>
+                        <div class="reply-footer">
+                            <button type="submit" class="btn-register">답글 등록하기</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-box">답글을 기다리는 리뷰가 없습니다. 모든 리뷰에 답글을 달았어요! 🎉</div>
+            {% endfor %}
+
+            {% if total_unreplied > rows|length %}
+            <div class="list-note">답글이 없는 리뷰 {{ total_unreplied }}건 중 위험도·최신순으로 {{ rows|length }}건을 표시합니다.</div>
+            {% endif %}
+        </div>
+    </main>
+
+</body>
+</html>

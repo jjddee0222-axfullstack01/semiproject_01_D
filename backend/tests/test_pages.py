@@ -14,7 +14,8 @@ def test_root_redirects_to_login(client):
     assert r.status_code == 303 and r.headers["location"].endswith("/login")
 
 
-@pytest.mark.parametrize("path", ["/dashboard", "/products", "/products/1", "/settings", "/feedback"])
+@pytest.mark.parametrize("path", ["/dashboard", "/products", "/products/1", "/analysis", "/cschatbot",
+                                  "/settings", "/feedback"])
 def test_protected_pages_redirect_to_login(client, path):
     r = client.get(path)
     assert r.url.path == "/login" and "로그인이 필요합니다" in r.text

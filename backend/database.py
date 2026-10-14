@@ -27,6 +27,11 @@ def this_month() -> date:
     return date.today().replace(day=1)
 
 
+def last_month() -> date:
+    """전월 1일 (쇼핑몰 분석 화면의 전월 대비 계산용)"""
+    return (this_month() - timedelta(days=1)).replace(day=1)
+
+
 def add_default_risk_keywords(db: Session, seller: User) -> None:
     """회원가입 시 기본 위험 키워드 등록 (셀러가 나중에 수정·삭제 가능)"""
     db.add_all(RiskKeyword(seller=seller, word=w, weight=wt) for w, wt in DEFAULT_RISK_KEYWORDS)
@@ -103,3 +108,4 @@ def _seed(db: Session) -> None:
         db.add(ProductMonthlyStat(product_id=product.id, month=this_month(), buyers=buyers))
 
     db.add(ShopMonthlyStat(seller_id=user.id, month=this_month(), visitors=12450, buyers=1280))
+    db.add(ShopMonthlyStat(seller_id=user.id, month=last_month(), visitors=11800, buyers=1080))   # 전월 (분석 화면 비교용)

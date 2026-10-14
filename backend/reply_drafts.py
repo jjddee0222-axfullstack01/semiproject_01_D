@@ -1,14 +1,16 @@
 """
-PIN POINT REVIEW - 부정 리뷰 사과 답글 초안 (US-16)
+PIN POINT REVIEW - 리뷰 답글 초안 (US-16, CS챗봇 화면)
 
-지금은 이슈 유형별 템플릿으로 초안을 만듭니다 (llm_model = "template-v1").
+부정 리뷰는 이슈 유형별 사과 답글, 긍정 리뷰는 감사 답글 초안을 만듭니다.
+
+지금은 템플릿으로 초안을 만듭니다 (llm_model = "template-v1").
 LLM API 를 연결할 때는 generate_reply_draft() 안에서 API 를 호출하고,
 돌려주는 모델 이름(DRAFT_MODEL)만 바꾸면 나머지 API·DB 저장은 그대로 동작합니다.
 """
 try:
-    from .models import IssueType, Review
+    from .models import IssueType, Polarity, Review
 except ImportError:
-    from models import IssueType, Review
+    from models import IssueType, Polarity, Review
 
 DRAFT_MODEL = "template-v1"
 
@@ -23,11 +25,21 @@ _BODY = {
 }
 
 
-def generate_reply_draft(review: Review, mall_name: str) -> tuple[str, str]:
-    """(초안 본문, 사용한 모델 이름)"""
-    issue = review.analysis.issue_type if review.analysis and review.analysis.issue_type else IssueType.ETC
+_THANKS = "소중한 리뷰 남겨 주셔서 진심으로 감사합니다. 앞으로도 만족하실 수 있도록 좋은 상품과 서비스로 보답하겠습니다."
+
+
+def _masked(review: Review) -> str:
     name = review.reviewer_name or "고객"
-    masked = name[0] + "*" * (len(name) - 1) if len(name) > 1 else name
+    return name[0] + "*" * (len(name) - 1) if len(name) > 1 else name
+
+
+def generate_reply_draft(review: Review, mall_name: str) -> tuple[str, str]:
+    """(초안 본문, 사용한 모델 이름) — 긍정 리뷰면 감사 답글, 그 외는 사과 답글"""
+    if review.analysis and review.analysis.sentiment == Polarity.POS:
+        return f"안녕하세요, {_masked(review)} 고객님. {mall_name}입니다.\n{_THANKS}", DRAFT_MODEL
+
+    issue = review.analysis.issue_type if review.analysis and review.analysis.issue_type else IssueType.ETC
+    masked = _masked(review)
     follow_up = ("교환 또는 환불을 원하시면 고객센터나 1:1 문의로 연락 주시면 빠르게 도와드리겠습니다."
                  if review.rating <= 2 else "더 좋은 상품과 서비스로 보답하겠습니다.")
     draft = f"안녕하세요, {masked} 고객님. {mall_name}입니다.\n{_BODY[issue]}\n{follow_up}\n감사합니다."

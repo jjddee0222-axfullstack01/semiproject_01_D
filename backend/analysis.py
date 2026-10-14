@@ -154,3 +154,63 @@ def summarize_reviews(reviews: list) -> tuple[str, str]:
         negative += f" (부정 리뷰 {len(negatives)}건 기준)"
 
     return positive, negative
+
+
+# ──────────────────────────────────────────────
+# 쇼핑몰 분석 리포트 (analysis.html 의 'AI 분석 봇 리포트')
+#   지금은 규칙 기반(rule-v1). LLM 을 붙일 때는 shop_report() 의 반환 형식만 유지하면
+#   화면(템플릿)은 그대로 쓸 수 있다.
+# ──────────────────────────────────────────────
+ISSUE_LABELS = {
+    IssueType.PRODUCT: "상품 품질",
+    IssueType.DELIVERY: "배송",
+    IssueType.PACKAGING: "포장",
+    IssueType.ETC: "기타",
+}
+
+# 이슈 유형별 개선 방안
+RECOMMENDATIONS = {
+    IssueType.PRODUCT: "불만이 집중된 상품의 검수 기준을 강화하고, 상세 페이지의 색상·크기 설명을 실제와 맞게 보완하세요.",
+    IssueType.DELIVERY: "출고 지연 구간을 확인하고, 배송 예정일 안내 문구를 상세 페이지와 주문 알림에 추가하세요.",
+    IssueType.PACKAGING: "완충재·박스 규격을 점검하고 파손 다발 상품은 이중 포장을 적용하세요.",
+    IssueType.ETC: "부정 리뷰에 빠르게 답글을 달아 고객 불만이 확산되지 않도록 관리하세요.",
+}
+
+
+def shop_report(reviews: list) -> dict:
+    """Review(ORM, analysis 로드됨) 목록 → 쇼핑몰 전체 분석 리포트
+
+    반환: {strengths, weaknesses, recommendations: [str], issue_counts: [(라벨, 건수)],
+          positive_count, negative_count}
+    """
+    analyzed = [r for r in reviews if r.analysis]
+    positives = [r.content_raw for r in analyzed if r.analysis.sentiment == Polarity.POS]
+    negatives = [r for r in analyzed if r.analysis.sentiment == Polarity.NEG]
+
+    pos_aspects = _top_aspects(positives)
+    neg_aspects = _top_aspects([r.content_raw for r in negatives])
+    issue_counter = Counter(r.analysis.issue_type or IssueType.ETC for r in negatives)
+
+    if not analyzed:
+        return {"strengths": "아직 분석된 리뷰가 없습니다.", "weaknesses": "", "recommendations": [],
+                "issue_counts": [], "positive_count": 0, "negative_count": 0}
+
+    strengths = (f"고객들은 {_join(pos_aspects)}을(를) 가장 많이 칭찬했습니다." if pos_aspects
+                 else "뚜렷하게 칭찬이 몰린 항목은 아직 없습니다.")
+    if negatives:
+        top_issue, top_count = issue_counter.most_common(1)[0]
+        weaknesses = (f"부정 리뷰 {len(negatives)}건 중 '{ISSUE_LABELS[top_issue]}' 문제가 {top_count}건으로 가장 많습니다."
+                      + (f" 주로 {_join(neg_aspects)} 관련 내용입니다." if neg_aspects else ""))
+        recommendations = [RECOMMENDATIONS[issue] for issue, _ in issue_counter.most_common(2)]
+    else:
+        weaknesses = "부정 리뷰가 없습니다."
+        recommendations = ["현재 강점을 상세 페이지와 광고 문구에 적극적으로 활용하세요."]
+
+    return {
+        "strengths": strengths,
+        "weaknesses": weaknesses,
+        "recommendations": recommendations,
+        "issue_counts": [(ISSUE_LABELS[i], n) for i, n in issue_counter.most_common()],
+        "positive_count": len(positives),
+        "negative_count": len(negatives),
+    }

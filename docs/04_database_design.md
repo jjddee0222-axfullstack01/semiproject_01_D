@@ -10,7 +10,7 @@
 
 | 구분 | 테이블 | 설명 | 기본키(PK) | 외래키(FK) · 고유(UNIQUE) |
 |---|---|---|---|---|
-| 계정 | `users` | 셀러(서비스 이용자). `status` = ACTIVE / WITHDRAWN(소프트 탈퇴) | id | UNIQUE email, business_number |
+| 계정 | `users` | 셀러(서비스 이용자). `status` 는 ACTIVE 만 사용 (탈퇴는 행 삭제, WITHDRAWN 은 미사용) | id | UNIQUE email, business_number |
 | 계정 | `sessions` | 로그인 세션. 토큰은 SHA-256 해시만 저장 | id | user_id → users (CASCADE) · UNIQUE session_token_hash |
 | 상품 | `products` | 셀러의 상품 | id | seller_id → users (CASCADE) |
 | 리뷰 | `reviews` | 수집한 리뷰. 원문(`content_raw`)과 정제본(`content_clean`) 분리 보존, `status` = VISIBLE / BLINDED | id | product_id → products (CASCADE) · blinded_by → users (SET NULL) |
@@ -42,7 +42,7 @@
 ## 3. 설계 규칙 (06_architecture.md 의 결정과 같음)
 
 - **블라인드 = 소프트 삭제 (D2)**: 리뷰를 지우지 않고 `status = BLINDED` + 사유·처리자·시각 기록. 통계·위험 리뷰·키워드·CSV 는 모두 `VISIBLE` 만 집계
-- **탈퇴 = 소프트 탈퇴 (D5)**: `users.status = WITHDRAWN`. 답글 작성자·블라인드 처리자는 `SET NULL` 로 익명화
+- **탈퇴 = 하드 삭제 (D5)**: `users` 행을 삭제. 외래키 규칙에 따라 세션·상품(→ 리뷰·분석·키워드 연결·답글·블라인드 이력)·위험 키워드·월별 통계는 `CASCADE` 로 함께 삭제, `feedbacks.user_id` 등은 `SET NULL`. 공용 키워드 사전(`keywords`)은 유지. 행이 사라지므로 같은 이메일·사업자번호로 재가입 가능 (UNIQUE 유지)
 - **소유권**: 상품·리뷰·답글·위험 키워드는 `products.seller_id` 가 로그인한 셀러인 것만 접근 (API 403, 화면 404)
 - **재분석 범위 식별**: `review_analysis.model_version` (지금은 `rule-v1`)
 - **임베딩 (D6)**: `products.description_embedding`, `reviews.content_embedding` JSON 컬럼 (현재 미사용, 컬럼만 유지)

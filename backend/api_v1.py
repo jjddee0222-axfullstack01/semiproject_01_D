@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session, selectinload
 
 try:
     from .analysis import MODEL_VERSION, RISK_SEVERITY
-    from .auth import clear_cookie, end_all_sessions, end_session, login_required, start_session
+    from .auth import clear_cookie, delete_account, end_session, login_required, start_session
     from .database import add_default_risk_keywords, analyze_and_save, seller_risk_keywords
     from .db import get_session
     from .models import (BlindAction, IngestLog, IssueType, Keyword, Polarity, Product,
@@ -36,7 +36,7 @@ try:
     from .security import hash_password, verify_password
 except ImportError:
     from analysis import MODEL_VERSION, RISK_SEVERITY
-    from auth import clear_cookie, end_all_sessions, end_session, login_required, start_session
+    from auth import clear_cookie, delete_account, end_session, login_required, start_session
     from database import add_default_risk_keywords, analyze_and_save, seller_risk_keywords
     from db import get_session
     from models import (BlindAction, IngestLog, IssueType, Keyword, Polarity, Product,
@@ -220,11 +220,10 @@ def change_password(body: S.PasswordChangeRequest, user: CurrentUser, db: DB):
 
 @router.delete("/users/me", status_code=204, tags=["인증·계정"])
 def api_withdraw(body: S.WithdrawRequest, user: CurrentUser, db: DB):
-    """US-04: 비밀번호 재확인 → status=WITHDRAWN (소프트 탈퇴) → 모든 세션 삭제"""
+    """US-04: 비밀번호 재확인 → 계정과 계정의 모든 데이터 삭제(하드 삭제, D5) → 쿠키 만료"""
     if not verify_password(body.password, user.password_hash):
         raise ApiError(401, "INVALID_PASSWORD", "비밀번호가 올바르지 않습니다.")
-    user.status, user.withdrawn_at = UserStatus.WITHDRAWN, datetime.now()
-    end_all_sessions(db, user)
+    delete_account(db, user)
     db.commit()
     response = _no_content()
     clear_cookie(response)

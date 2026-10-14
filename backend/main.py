@@ -32,7 +32,7 @@ from starlette.middleware.sessions import SessionMiddleware
 try:
     from .analysis import RISK_SEVERITY, shop_report, summarize_reviews
     from .api_v1 import setup_api
-    from .auth import (LoginRequired, clear_cookie, end_all_sessions, end_session,
+    from .auth import (LoginRequired, clear_cookie, delete_account, end_session,
                        get_current_user, login_required, start_session)
     from .database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                            seller_risk_keywords, this_month)
@@ -47,7 +47,7 @@ try:
 except ImportError:
     from analysis import RISK_SEVERITY, shop_report, summarize_reviews
     from api_v1 import setup_api
-    from auth import (LoginRequired, clear_cookie, end_all_sessions, end_session,
+    from auth import (LoginRequired, clear_cookie, delete_account, end_session,
                       get_current_user, login_required, start_session)
     from database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                           seller_risk_keywords, this_month)
@@ -751,14 +751,12 @@ def withdraw(request: Request,
              current_password: str = Form(""),
              user: User = Depends(login_required),
              db: Session = Depends(get_session)):
-    """회원 탈퇴 (US-04, D5): 비밀번호 재확인 → status=WITHDRAWN 소프트 탈퇴 → 모든 세션 삭제"""
+    """회원 탈퇴 (US-04, D5): 비밀번호 재확인 → 계정과 계정의 모든 데이터 삭제(하드 삭제) → 쿠키 만료"""
     if not verify_password(current_password, user.password_hash):
         flash(request, "비밀번호가 올바르지 않아 탈퇴할 수 없습니다.", "error")
         return render_settings(request, db, user, status_code=401)
 
-    user.status = UserStatus.WITHDRAWN
-    user.withdrawn_at = datetime.now()
-    end_all_sessions(db, user)
+    delete_account(db, user)
     db.commit()
 
     response = redirect(request, "login")

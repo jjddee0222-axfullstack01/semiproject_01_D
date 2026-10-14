@@ -20,7 +20,7 @@
 | POST | `/auth/logout` | 로그아웃, 세션 행 삭제와 쿠키 만료 | 204 | US-03 |
 | GET | `/users/me` | 내 정보 조회 | 200 |  |
 | PATCH | `/users/me` | 쇼핑몰명·플랫폼 등 수정 | 200 |  |
-| DELETE | `/users/me` | 회원 탈퇴 (body: password 재확인), 해당 사용자의 모든 세션도 함께 삭제 | 204 / 401 | US-04 |
+| DELETE | `/users/me` | 회원 탈퇴 (body: password 재확인). 계정과 상품·리뷰·답글 등 모든 데이터, 세션을 함께 삭제 (하드 삭제) | 204 / 401 | US-04 |
 
 ## 2. 상품 (E2, Must)
 

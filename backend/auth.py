@@ -76,8 +76,24 @@ def end_session(db: Session, request: Request, response: Response) -> None:
 
 
 def end_all_sessions(db: Session, user: User) -> None:
-    """회원 탈퇴 등: 해당 사용자의 모든 세션 삭제 (commit 은 호출한 쪽에서)"""
+    """해당 사용자의 모든 세션 삭제 (commit 은 호출한 쪽에서)"""
     db.execute(delete(UserSession).where(UserSession.user_id == user.id))
+
+
+def delete_account(db: Session, user: User) -> None:
+    """회원 탈퇴 (US-04, D5) — 하드 삭제. users 행을 지우고 나머지는 DB 외래키 규칙에 맡긴다 (commit 은 호출한 쪽에서)
+
+      CASCADE  : sessions, risk_keywords, shop_monthly_stats,
+                 products → reviews → review_analysis · review_keywords · review_replies ·
+                                       review_blind_logs · reply_suggestions, product_monthly_stats
+      SET NULL : feedbacks.user_id (서비스 의견은 익명으로 남김), 답글 작성자·블라인드 처리자
+      남는 것  : keywords (모든 셀러가 함께 쓰는 키워드 사전)
+
+    ORM 관계를 거치지 않고 DELETE 한 번으로 처리해 연결된 행을 메모리에 불러오지 않는다.
+    계정 행이 사라지므로 같은 이메일·사업자번호로 다시 가입할 수 있다 (UNIQUE 제약은 유지).
+    """
+    db.execute(delete(User).where(User.id == user.id).execution_options(synchronize_session=False))
+    db.expunge(user)
 
 
 def clear_cookie(response: Response) -> None:

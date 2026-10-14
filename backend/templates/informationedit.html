@@ -356,7 +356,7 @@
 
                 <div class="form-actions">
                     <button type="submit" class="btn-withdraw" formaction="{{ url_for('withdraw') }}"
-                            onclick="if(!document.getElementById('current-pwd').value){alert('탈퇴하려면 현재 비밀번호를 입력해 주세요.');return false;} return confirm('정말 탈퇴하시겠습니까?');">회원 탈퇴</button>
+                            onclick="if(!document.getElementById('current-pwd').value){alert('탈퇴하려면 현재 비밀번호를 입력해 주세요.');return false;} return confirm('탈퇴하면 계정과 상품·리뷰·답글·위험 키워드 등 모든 데이터가 즉시 삭제되며 되돌릴 수 없습니다.\n정말 탈퇴하시겠습니까?');">회원 탈퇴</button>
                     <button type="submit" class="btn-save">저장하기</button>
                 </div>
             </form>

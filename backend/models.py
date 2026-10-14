@@ -81,7 +81,7 @@ class MallPlatform(str, enum.Enum):
 
 class UserStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
-    WITHDRAWN = "WITHDRAWN"    # D5: 소프트 탈퇴
+    WITHDRAWN = "WITHDRAWN"    # 사용하지 않음: 탈퇴는 하드 삭제로 변경 (D5, auth.delete_account). 기존 데이터 호환용으로 남김
 
 
 class ReviewStatus(str, enum.Enum):

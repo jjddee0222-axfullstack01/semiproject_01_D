@@ -75,3 +75,6 @@ def test_withdraw(other_api):
     assert other_api.request("DELETE", f"{API}/users/me", json={"password": OTHER["password"]}).status_code == 204
     assert other_api.get(f"{API}/users/me").status_code == 401
     assert api_login(other_api, OTHER["email"], OTHER["password"]).status_code == 401   # 탈퇴 계정 로그인 불가
+    # 하드 삭제라 같은 이메일·사업자번호로 다시 가입 가능
+    assert other_api.post(f"{API}/auth/signup", json=OTHER).status_code == 201
+    assert api_login(other_api, OTHER["email"], OTHER["password"]).status_code == 200

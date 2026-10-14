@@ -1,9 +1,9 @@
 """HTML 화면 테스트 (로그인·회원가입·대시보드·상품·설정·의견 보내기·404)"""
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 import models as m
-from tests.conftest import DEMO_EMAIL, DEMO_PASSWORD
+from tests.conftest import DEMO_EMAIL, DEMO_PASSWORD, OTHER
 
 pytestmark = pytest.mark.pages
 
@@ -108,10 +108,31 @@ def test_withdraw(page, session):
     assert r.status_code == 401 and "탈퇴할 수 없습니다" in r.text
     r = page.post("/withdraw", data={"current_password": DEMO_PASSWORD})
     assert "탈퇴가 완료" in r.text
-    user = session.scalar(select(m.User))
-    assert user.status == m.UserStatus.WITHDRAWN and user.withdrawn_at is not None
-    assert not session.scalars(select(m.UserSession)).all()
+    # 하드 삭제 (D5): 계정과 계정에 딸린 데이터가 모두 지워짐 (외래키 CASCADE)
+    for model in (m.User, m.UserSession, m.Product, m.Review, m.ReviewAnalysis, m.ReviewKeyword,
+                  m.RiskKeyword, m.ShopMonthlyStat, m.ProductMonthlyStat):
+        assert session.scalar(select(func.count()).select_from(model)) == 0, model.__name__
     assert page.post("/login", data={"email": DEMO_EMAIL, "password": DEMO_PASSWORD}).status_code == 401
+
+
+def test_withdraw_then_signup_again_with_same_email(page):
+    """탈퇴 후 같은 이메일·사업자번호로 다시 가입 가능 (UNIQUE 는 유지, 행이 지워져서 가능)"""
+    page.post("/withdraw", data={"current_password": DEMO_PASSWORD})
+    r = page.post("/signup", data={"name": "홍길동", "email": DEMO_EMAIL, "password": "Again123!",
+                                   "password_confirm": "Again123!", "mall_name": "다시몰",
+                                   "mall_platform": "NAVER", "business_number": "123-45-67890"})
+    assert "회원가입이 완료" in r.text
+    r = page.post("/login", data={"email": DEMO_EMAIL, "password": "Again123!"})
+    assert "다시몰 대시보드" in r.text and "등록된 리뷰가 없습니다" in r.text      # 예전 데이터는 남지 않음
+
+
+def test_withdraw_keeps_other_sellers_and_anonymizes_feedback(page, other_api, session):
+    page.post("/feedback", data={"complaint": "탈퇴 전 의견", "suggestion": "개선 제안"})
+    page.post("/withdraw", data={"current_password": DEMO_PASSWORD})
+    assert session.scalars(select(m.User.email)).all() == [OTHER["email"]]      # 다른 셀러는 그대로
+    feedback = session.scalar(select(m.Feedback))
+    assert feedback.complaint == "탈퇴 전 의견" and feedback.user_id is None      # 의견은 익명으로 남음
+    assert session.scalar(select(func.count()).select_from(m.Keyword)) > 0      # 공용 키워드 사전은 유지
 
 
 # ── 의견 보내기 / 로그아웃

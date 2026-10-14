@@ -41,7 +41,7 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 | D2 | 블라인드는 소프트 삭제 | 물리 삭제 없이 `reviews.status = BLINDED`, `blind_reason` 필수, 이력은 `review_blind_logs`에 기록 |
 | D3 | 소유권 기반 인가 | 역할(role) 없이 `products.seller_id = 요청자` 여부로만 판단, 아니면 403 |
 | D4 | 답글 정책 | 블라인드된 리뷰에는 답글 등록 불가(409). 상위 답글 삭제 시 하위 답글도 함께 삭제(`ON DELETE CASCADE`) |
-| D5 | 탈퇴 정책 | `users.status = WITHDRAWN`으로 소프트 처리, 답글 작성자·블라인드 처리자는 NULL로 익명화 |
+| D5 | 탈퇴 정책 | 하드 삭제: `users` 행을 지우고 연결 데이터는 외래키 `CASCADE` 로 함께 삭제, 서비스 의견(`feedbacks`)만 작성자 NULL 로 남김. 재가입 허용 (`auth.delete_account`) |
 | D6 | 임베딩 저장 | MariaDB JSON 컬럼. 벡터 인덱스를 쓸 수 없어 유사도는 애플리케이션(NumPy)에서 계산 |
 
 ## 4. 인증·인가

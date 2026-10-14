@@ -231,6 +231,99 @@
         .search-form a {
             color: #666666;
         }
+
+        /* 리뷰 CSV 업로드 */
+        .upload-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .upload-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+
+        .upload-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .upload-head a {
+            font-size: 12px;
+            color: #666666;
+        }
+
+        .upload-guide {
+            font-size: 12px;
+            color: #868E96;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .upload-form {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .upload-drop {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            height: 44px;
+            padding: 0 12px;
+            border: 1px dashed #CED4DA;
+            border-radius: 8px;
+            background-color: #F8F9FA;
+            font-size: 13px;
+            color: #555555;
+            cursor: pointer;
+        }
+
+        .upload-drop:hover,
+        .upload-drop.dragover {
+            border-color: #111111;
+            background-color: #F1F3F5;
+        }
+
+        .upload-drop input {
+            display: none;
+        }
+
+        .upload-drop .pick {
+            padding: 4px 10px;
+            border: 1px solid #CED4DA;
+            border-radius: 6px;
+            background-color: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+            color: #111111;
+            white-space: nowrap;
+        }
+
+        .upload-form button {
+            height: 44px;
+            padding: 0 18px;
+            border: none;
+            border-radius: 8px;
+            background-color: #111111;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .upload-form button:disabled {
+            background-color: #ADB5BD;
+            cursor: default;
+        }
     </style>
 </head>
 <body>
@@ -244,6 +337,26 @@
             <span class="page-guide">상품별 대시보드를 확인하려면 상품을 클릭하세요.</span>
         </div>
         {% include '_flash.html' %}
+
+        <!-- 리뷰 CSV 업로드: 상품이 없으면 새로 만들고, 리뷰는 적재 후 바로 분석 -->
+        <div class="upload-card">
+            <div class="upload-head">
+                <div class="upload-title">리뷰 데이터 업로드 (CSV)</div>
+                <a href="{{ url_for('products_upload_template') }}">양식 내려받기</a>
+            </div>
+            <div class="upload-guide">
+                필수 열: <b>상품명, 평점(1~5), 리뷰내용, 작성일(2026-10-01)</b> · 선택 열: 카테고리, 작성자, 상품설명<br>
+                같은 상품·작성자·작성일·내용의 리뷰는 중복으로 보고 건너뜁니다. 최대 5MB · 10,000행, UTF-8 또는 엑셀 CSV.
+            </div>
+            <form class="upload-form" method="post" action="{{ url_for('products_upload') }}" enctype="multipart/form-data">
+                <label class="upload-drop" id="upload-drop">
+                    <span class="pick">파일 선택</span>
+                    <span id="upload-name">CSV 파일을 선택하거나 여기로 끌어다 놓으세요</span>
+                    <input type="file" name="file" id="upload-file" accept=".csv,text/csv" required>
+                </label>
+                <button type="submit" id="upload-btn" disabled>업로드</button>
+            </form>
+        </div>
 
         <form class="search-form" method="get" action="{{ url_for('products') }}" role="search">
             <input type="search" name="q" value="{{ q }}" placeholder="상품 이름으로 검색" aria-label="상품 검색" maxlength="100">
@@ -271,6 +384,27 @@
             {% endfor %}
         </div>
     </main>
+
+    <script>
+        // 파일 이름 표시 + 끌어다 놓기 + 업로드 중 버튼 잠금
+        const fileInput = document.getElementById("upload-file");
+        const drop = document.getElementById("upload-drop");
+        const button = document.getElementById("upload-btn");
+        function showFile() {
+            const file = fileInput.files[0];
+            document.getElementById("upload-name").textContent =
+                file ? `${file.name} (${(file.size / 1024).toFixed(1)} KB)` : "CSV 파일을 선택하거나 여기로 끌어다 놓으세요";
+            button.disabled = !file;
+        }
+        fileInput.addEventListener("change", showFile);
+        ["dragenter", "dragover"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add("dragover"); }));
+        ["dragleave", "drop"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove("dragover"); }));
+        drop.addEventListener("drop", ev => { fileInput.files = ev.dataTransfer.files; showFile(); });
+        document.querySelector(".upload-form").addEventListener("submit", () => {
+            button.disabled = true;
+            button.textContent = "업로드 중…";
+        });
+    </script>
 
 </body>
 </html>

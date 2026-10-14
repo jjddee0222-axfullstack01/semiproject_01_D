@@ -12,6 +12,7 @@ DB: MariaDB — 접속 정보는 backend/.env (처음이라면 .env.example 복�
 데모 계정: demo@pinpoint.kr / Pinpoint1!
 API 문서: http://127.0.0.1:8000/docs
 """
+import csv
 import os
 import re
 from contextlib import asynccontextmanager
@@ -19,8 +20,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
@@ -39,6 +40,7 @@ try:
     from .models import (BlindAction, Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
                          ReviewAnalysis, ReviewBlindLog, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                          UserStatus, visible_reviews)
+    from .pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
     from .reply_drafts import generate_reply_draft
     from .schemas import ReviewCreate, ReviewCreateResult
     from .security import hash_password, verify_password
@@ -53,6 +55,7 @@ except ImportError:
     from models import (BlindAction, Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
                         ReviewAnalysis, ReviewBlindLog, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                         UserStatus, visible_reviews)
+    from pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
     from reply_drafts import generate_reply_draft
     from schemas import ReviewCreate, ReviewCreateResult
     from security import hash_password, verify_password
@@ -307,6 +310,64 @@ def products(request: Request,
               "negative_count": int(neg), "risky_count": int(rk)}
              for p, n, avg, pos, neg, rk in rows]
     return render(request, "products.html", active_menu="products", products=items, q=q)
+
+
+# ── 리뷰 CSV 업로드 (상품 조회 화면) — 내부 파이프라인(pipeline.py)과 같은 규칙으로 적재·분석
+UPLOAD_MAX_BYTES = 5 * 1024 * 1024        # 5MB
+UPLOAD_MAX_ROWS = 10_000
+UPLOAD_TEMPLATE = ("상품명,카테고리,작성자,평점,리뷰내용,작성일\r\n"
+                   "프리미엄 텀블러 500ml,주방,김민수,5,보온이 오래가고 디자인도 예뻐요.,2026-10-01\r\n"
+                   "프리미엄 텀블러 500ml,주방,이지은,2,뚜껑이 헐거워서 물이 새요. 교환 원합니다.,2026-10-03\r\n")
+
+
+@app.get("/products/upload-template.csv", name="products_upload_template")
+def products_upload_template(user: User = Depends(login_required)):
+    """업로드 양식 CSV (엑셀에서 한글이 깨지지 않게 UTF-8 BOM)"""
+    return Response(content=UPLOAD_TEMPLATE.encode("utf-8-sig"), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="review_upload_template.csv"'})
+
+
+@app.post("/products/upload", name="products_upload")
+async def products_upload(request: Request,
+                          file: Optional[UploadFile] = File(None),
+                          user: User = Depends(login_required),
+                          db: Session = Depends(get_session)):
+    """리뷰 CSV 업로드 → 상품이 없으면 새로 만들고, 리뷰를 적재한 뒤 바로 분석 (중복·오류 행은 건너뜀)"""
+    filename = (file.filename or "").strip() if file else ""
+    error = None
+    if not filename:
+        error = "업로드할 CSV 파일을 선택해 주세요."
+    elif not filename.lower().endswith(".csv"):
+        error = "CSV 파일(.csv)만 업로드할 수 있습니다. 엑셀은 '다른 이름으로 저장 → CSV'로 저장해 주세요."
+    else:
+        data = await file.read(UPLOAD_MAX_BYTES + 1)
+        if len(data) > UPLOAD_MAX_BYTES:
+            error = f"파일이 너무 큽니다. {UPLOAD_MAX_BYTES // (1024 * 1024)}MB 이하로 나눠서 올려 주세요."
+        else:
+            try:
+                rows = parse_csv_text(decode_csv_bytes(data))
+            except (IngestError, csv.Error) as exc:
+                error = f"CSV를 읽을 수 없습니다: {exc}"
+            else:
+                if not rows:
+                    error = "헤더 아래에 리뷰 데이터가 없습니다."
+                elif len(rows) > UPLOAD_MAX_ROWS:
+                    error = f"한 번에 {UPLOAD_MAX_ROWS:,}행까지 올릴 수 있습니다. (현재 {len(rows):,}행)"
+
+    if error:
+        flash(request, error, "error")
+        return redirect(request, "products")
+
+    log, problems = ingest_rows(db, batch_name=f"upload:{user.id}:{filename}", rows=rows, seller=user)
+    added = log.total_count - log.duplicate_count - log.missing_count
+    message = f"'{filename}' 업로드 완료: 리뷰 {added:,}건 추가"
+    if log.duplicate_count:
+        message += f", 중복 {log.duplicate_count:,}건 제외"
+    if log.missing_count:
+        shown = ", ".join(problems[:5]) + (f" 외 {len(problems) - 5}건" if len(problems) > 5 else "")
+        message += f", 오류 {log.missing_count:,}건 건너뜀 ({shown})"
+    flash(request, message + ".", "success" if added else "error")
+    return redirect(request, "products")
 
 
 @app.get("/products/{product_id}", name="product_dashboard", response_class=HTMLResponse)

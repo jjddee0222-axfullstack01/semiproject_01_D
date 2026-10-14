@@ -10,7 +10,7 @@
 | 1 | 로그인 | index.html → index.html | `/login` | 이메일·비밀번호, 회원가입·비밀번호 찾기 링크 | US-02 |
 | 2 | 회원가입 | joinmembership.html → joinmembership.html | `/signup` | 이름·이메일·비밀번호(규칙)·쇼핑몰명·플랫폼·사업자번호 | US-01 |
 | 3 | 대시보드 | dashboard.html → dashboard.html | `/dashboard` | 위험 리뷰 경고, 최근 리뷰 3개, 당월 방문자·구매자 | US-15 |
-| 4 | 상품 조회 | productresearch.html → products.html | `/products` | 상품 검색, 상품 카드(평점·리뷰 수·긍/부정·위험) | US-05, 누락 기능(상품 검색) |
+| 4 | 상품 조회 | productresearch.html → products.html | `/products` | 리뷰 CSV 업로드(파일 선택·끌어다 놓기, 양식 내려받기, 결과 안내), 상품 검색, 상품 카드(평점·리뷰 수·긍/부정·위험) | US-05, US-09, 누락 기능(상품 검색) |
 | 5 | 상품별 대시보드 | productdashboard.html → productdashboard.html | `/products/{id}` | 상세 리뷰 + 블라인드(사유 입력)·복구, 월별 리뷰 추이 차트, 긍정·부정 요약 | US-05, US-06, US-12 |
 | 6 | 쇼핑몰 분석 | analysis.html → analysis.html | `/analysis` | 지표 4개, 리뷰 통계 차트 4개(상품·기간 필터), CSV 내보내기, AI 분석 리포트, 칭찬·불만 리뷰, 운영 특이 사항 | US-12~14, 누락 기능(CSV) |
 | 7 | CS챗봇 | cschatbot.html → cschatbot.html | `/cschatbot` | 답글 없는 리뷰(위험도순) + 추천 답글 수정·복사·처리 완료·되돌리기 | US-07, US-15, US-16 |

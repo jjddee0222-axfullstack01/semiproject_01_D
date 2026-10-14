@@ -18,8 +18,8 @@ CREATE DATABASE IF NOT EXISTS pinpoint
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
-CREATE USER IF NOT EXISTS 'pinpoint'@'localhost' IDENTIFIED BY '여기에_비밀번호';
-CREATE USER IF NOT EXISTS 'pinpoint'@'127.0.0.1' IDENTIFIED BY '여기에_비밀번호';
+CREATE USER IF NOT EXISTS 'pinpoint'@'localhost' IDENTIFIED BY '@0124Eqt';
+CREATE USER IF NOT EXISTS 'pinpoint'@'127.0.0.1' IDENTIFIED BY '@0124Eqt';
 
 GRANT ALL PRIVILEGES ON pinpoint.* TO 'pinpoint'@'localhost';
 GRANT ALL PRIVILEGES ON pinpoint.* TO 'pinpoint'@'127.0.0.1';

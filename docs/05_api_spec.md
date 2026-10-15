@@ -94,4 +94,4 @@
 
 | 메서드 | 경로 | 설명 | 응답 |
 | --- | --- | --- | --- |
-| POST | `/email-code` | 이메일 인증 코드 발송 (body: `{purpose: signup\|reset, email}`). 10분 유효, 재발송 60초 뒤, 이메일당 1시간 5회·IP당 20회. 개발 모드(`MAIL_HOST` 없음)에서는 응답에 `dev_code` 포함 | 200 / 400 / 409(가입된 이메일로 signup) / 429 |
+| POST | `/email-code` | 이메일 인증 코드 발송 (body: `{purpose: signup\|reset, email}`). 10분 유효, 재발송 60초 뒤, 이메일당 1시간 5회·IP당 20회(`.env` 로 조정). 로컬 개발 모드(`MAIL_HOST` 없음, `COOKIE_SECURE=0`)에서만 응답에 `dev_code` 포함 | 200 / 400 / 409(가입된 이메일로 signup) / 429 / 503(운영 설정인데 메일 서버 미설정) |

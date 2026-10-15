@@ -114,7 +114,7 @@
                     {% for key, label in period_labels.items() %}<option value="{{ key }}" {% if filters.period == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
                 </select>
                 <select name="sentiment" aria-label="감성">
-                    <option value="">긍정·부정 전체</option>
+                    <option value="">감성 전체</option>
                     {% for key, label in sentiment_labels.items() %}<option value="{{ key }}" {% if filters.sentiment == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
                 </select>
                 <select name="issue" aria-label="이슈 유형">

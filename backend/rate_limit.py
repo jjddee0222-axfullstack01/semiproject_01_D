@@ -10,9 +10,25 @@ PIN POINT REVIEW - 시도 횟수 제한 (로그인 · 비밀번호 찾기 · 인
   - uvicorn 을 여러 프로세스(--workers 2 이상)로 띄우면 프로세스마다 따로 셈 → 이 프로젝트는 1개 프로세스로 실행
   - DB 구조를 바꾸지 않기 위해 이 방식을 사용. 서비스 규모가 커지면 Redis 등으로 옮긴다
 """
+import os
 import threading
 import time
 from typing import Optional
+
+# backend/.env 를 먼저 읽어 두기 (아래 제한 값을 .env 로 바꿀 수 있게). db.py 가 import 될 때 .env 를 읽음
+try:
+    from . import db as _db  # noqa: F401
+except ImportError:
+    import db as _db  # noqa: F401
+
+
+def env_int(name: str, default: int) -> int:
+    """환경 변수(backend/.env)에서 1 이상의 정수를 읽음. 비었거나 잘못된 값이면 기본값"""
+    try:
+        value = int(os.environ.get(name, "").split("#")[0].strip())   # 줄 끝 주석 허용
+    except ValueError:
+        return default
+    return value if value >= 1 else default
 
 
 class AttemptLimiter:
@@ -104,9 +120,10 @@ class RateCounter:
 
 
 # ── 서비스 전체에서 쓰는 제한 값
-LOGIN_MAX_FAILS = 5                  # 같은 이메일로 5번 틀리면
-LOGIN_LOCK_SECONDS = 10 * 60         #   10분 잠금
-LOGIN_IP_MAX_FAILS = 20              # 같은 IP 에서 (여러 이메일로) 20번 틀려도 10분 잠금
+#    backend/.env 로 바꿀 수 있음. 발표장·강의실처럼 여러 사람이 같은 와이파이(같은 IP)를 쓰면 IP 기준 값을 늘린다
+LOGIN_MAX_FAILS = env_int("LOGIN_MAX_FAILS", 5)                      # 같은 이메일로 5번 틀리면
+LOGIN_LOCK_SECONDS = env_int("LOGIN_LOCK_MINUTES", 10) * 60          #   10분 잠금
+LOGIN_IP_MAX_FAILS = env_int("LOGIN_IP_MAX_FAILS", 20)               # 같은 IP 에서 (여러 이메일로) 20번 틀려도 잠금
 RESET_MAX_FAILS = 5                  # 비밀번호 찾기: 정보 불일치 5번 → 10분 잠금
 RESET_LOCK_SECONDS = 10 * 60
 

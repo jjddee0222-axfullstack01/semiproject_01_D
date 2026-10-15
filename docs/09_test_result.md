@@ -4,8 +4,8 @@
 
 | 항목 | 내용 |
 |---|---|
-| 실행일 | 2026-10-15 (9일차 품질 점검) |
-| 대상 | `main` 최신 코드 + 9일차 수정 (중립 분류, 인증·로그인 보안 강화, 위험 키워드 즉시 반영) |
+| 실행일 | 2026-10-15 (9일차 품질 점검, 10일차 2차 점검 후 재실행) |
+| 대상 | `main` 최신 코드 + 9일차 수정 (중립 분류, 인증·로그인 보안 강화, 위험 키워드 즉시 반영) + 10일차 2차 점검 수정 (I-17~I-23) |
 | 환경 | Python 3.13, FastAPI 0.143, SQLAlchemy 2.0.36, Pydantic 2.13, pytest 9.0, 임시 SQLite DB |
 | 브라우저 시나리오 | uvicorn 로컬 서버(최상위 폴더에서 `uvicorn main:app`) + Chromium (Playwright 1.56), 데스크톱 1280px · 휴대폰 390px |
 
@@ -13,29 +13,29 @@
 
 | 구분 | 결과 |
 |---|---|
-| 자동 테스트 | **298개 중 298개 통과** (실패 0, 건너뜀 0) |
+| 자동 테스트 | **322개 중 322개 통과** (실패 0, 건너뜀 0) |
 | 사용자 시나리오 | **12개 중 12개 통과** (S-01 ~ S-12) |
 | Must 기능(FR-01~08) 정상 동작률 | **100%** |
-| MariaDB 호환 | 테스트 중 실행된 SQL 29,183건을 MariaDB 방언으로 생성 → 오류 0건 |
-| 발견·해결한 문제 | 16건 (높음 6, 중간 6, 낮음 4) — 모두 해결 |
+| MariaDB 호환 | 테스트 중 실행된 SQL 31,290건을 MariaDB 방언으로 생성 → 오류 0건 |
+| 발견·해결한 문제 | 23건 (높음 6, 중간 9, 낮음 8) — 모두 해결 |
 
 ## 2. 자동 테스트 (단위 · API · 통합 · 회귀)
 
 ```
 cd backend && python -m pytest
-298 passed
+322 passed
 ```
 
 | 단계 | 테스트 수 | 결과 |
 |---|---|---|
 | 단위 (`-m unit`) | 52 | 통과 |
 | API (`-m api`) | 61 | 통과 |
-| 화면·통합 (`-m pages`) | 174 | 통과 |
+| 화면·통합 (`-m pages`) | 198 | 통과 |
 | DB 모델 (`test_models.py`) | 11 | 통과 |
 
 | 파일 | 수 | 파일 | 수 |
 |---|---|---|---|
-| `test_unit.py` | 24 | `test_pages.py` | 27 |
+| `test_unit.py` | 24 | `test_pages.py` | 28 |
 | `test_schemas.py` | 25 | `test_pages_analysis_cs.py` | 20 |
 | `test_models.py` | 11 | `test_pages_day6.py` | 21 |
 | `test_mariadb_sql.py` | 3 | `test_pages_upload.py` | 15 |
@@ -45,9 +45,12 @@ cd backend && python -m pytest
 | `test_api_stats.py` | 11 | `test_pages_extra.py` | 34 |
 | `test_api_risk_keywords.py` | 5 | `test_neutral_sentiment.py` | 3 |
 | `test_api_exports_suggestions.py` | 5 | `test_security_limits.py` | 16 |
-| `test_api_internal.py` | 9 | **합계** | **298** |
+| `test_api_internal.py` | 9 | `test_review_fixes.py` | 23 |
+| | | **합계** | **322** |
 
 **회귀 확인:** 9일차 수정 전 276개 → 수정 후 298개 (새 테스트 22개). 중립 분류 도입으로 실패한 기존 테스트 9건은 오류가 아니라 의도한 숫자 변화라서 기대값을 새 규칙에 맞춰 고쳤습니다 (예: 데모 데이터 부정 비율 0.5455 → 0.2727, 상품 A 부정 리뷰 3 → 1).
+
+**10일차 2차 점검:** favicon 테스트 1개(팀 추가)와 점검 수정 테스트 23개를 더해 299개 → 322개. CSV 수식 주입, 운영 모드 인증 코드 노출 등은 고치기 전에 먼저 재현해 확인했습니다 (I-17~I-23).
 
 ## 3. 사용자 시나리오
 
@@ -79,7 +82,7 @@ cd backend && python -m pytest
 | FR-20~25 (비밀번호 변경·이메일 인증·리뷰 목록·업로드 이력·처리할 일·모바일) | `test_pages_password_reset.py`, `test_pages_email_verify.py`, `test_pages_extra.py`, S-03·S-09·S-11 | 통과 |
 | FR-26 중립 분류 | `test_unit.py`, `test_neutral_sentiment.py`, S-06·S-07·S-09 | 통과 |
 | FR-27 위험 키워드 즉시 반영 | `test_pages_day6.py`, `test_api_risk_keywords.py`, S-08 | 통과 |
-| NFR-01~09 보안·품질 | `test_security_limits.py`, `test_unit.py`, `test_models.py`, S-02·S-12 | 통과 |
+| NFR-01~11 보안·품질 | `test_security_limits.py`, `test_review_fixes.py`, `test_unit.py`, `test_models.py`, S-02·S-12 | 통과 |
 
 ## 5. 기타 확인
 

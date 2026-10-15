@@ -22,6 +22,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
@@ -35,7 +36,8 @@ try:
     from .auth import (LoginRequired, clear_cookie, delete_account, end_all_sessions, end_session,
                        get_current_user, login_required, start_session)
     from . import rate_limit
-    from .email_verify import PURPOSES, check_code, dev_mode, issue_code, verification_enabled
+    from .email_verify import (PURPOSES, MailUnavailable, check_code, issue_code, mail_config_warning,
+                               show_code_on_screen, verification_enabled)
     from .database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                            reanalyze_seller_reviews, seller_risk_keywords, this_month)
     from .db import describe_db, get_session
@@ -52,7 +54,8 @@ except ImportError:
     from auth import (LoginRequired, clear_cookie, delete_account, end_all_sessions, end_session,
                       get_current_user, login_required, start_session)
     import rate_limit
-    from email_verify import PURPOSES, check_code, dev_mode, issue_code, verification_enabled
+    from email_verify import (PURPOSES, MailUnavailable, check_code, issue_code, mail_config_warning,
+                              show_code_on_screen, verification_enabled)
     from database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                           reanalyze_seller_reviews, seller_risk_keywords, this_month)
     from db import describe_db, get_session
@@ -71,6 +74,8 @@ BASE_DIR = Path(__file__).resolve().parent
 async def lifespan(_app: FastAPI):
     print(f"[PIN POINT] DB: {describe_db()}")
     if warning := rate_limit.secret_key_warning(os.environ.get("SECRET_KEY", "")):
+        print(warning)
+    if warning := mail_config_warning():
         print(warning)
     init_db()            # 서버 시작 시 테이블 생성 + (비어 있으면) 데모 데이터
     yield
@@ -163,6 +168,11 @@ async def login_required_handler(request: Request, _exc: LoginRequired):
 # ──────────────────────────────────────────────
 # 로그인 / 회원가입 / 로그아웃  (index.html, joinmembership.html)
 # ──────────────────────────────────────────────
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)
+
+
 @app.get("/", name="index")
 def index(request: Request, user=Depends(get_current_user)):
     return redirect(request, "dashboard" if user else "login")
@@ -193,7 +203,8 @@ def login(request: Request,
         if left == 0:
             message = rate_limit.lock_message(rate_limit.LOGIN_LOCK_SECONDS)
         elif left <= 2:
-            message = f"이메일 또는 비밀번호가 올바르지 않습니다. ({left}번 더 틀리면 10분 동안 잠깁니다)"
+            message = (f"이메일 또는 비밀번호가 올바르지 않습니다. "
+                       f"({left}번 더 틀리면 {rate_limit.LOGIN_LOCK_SECONDS // 60}분 동안 잠깁니다)")
         else:
             message = "이메일 또는 비밀번호가 올바르지 않습니다."
         flash(request, message, "error")
@@ -227,7 +238,10 @@ async def email_code(request: Request, db: Session = Depends(get_session)):
         return JSONResponse({"ok": False, "message": "이미 가입된 이메일입니다."}, status_code=409)
     # 비밀번호 변경: 가입되지 않은 이메일이어도 같은 안내를 보여 줌 (가입 여부 노출 방지, 메일은 보내지 않음)
     deliver = purpose == "signup" or (existing is not None and existing.status == UserStatus.ACTIVE)
-    ok, message, dev_code = issue_code(purpose, email, deliver=deliver, ip=rate_limit.client_ip(request))
+    try:
+        ok, message, dev_code = issue_code(purpose, email, deliver=deliver, ip=rate_limit.client_ip(request))
+    except MailUnavailable as exc:              # 운영 모드인데 메일 서버 미설정
+        return JSONResponse({"ok": False, "message": str(exc)}, status_code=503)
     payload = {"ok": ok, "message": message}
     if dev_code:
         payload["dev_code"] = dev_code          # 개발 모드(메일 서버 미설정)에서만
@@ -236,7 +250,7 @@ async def email_code(request: Request, db: Session = Depends(get_session)):
 
 def email_context() -> dict:
     """회원가입·비밀번호 변경 템플릿에 넘기는 이메일 인증 설정"""
-    return {"email_verification": verification_enabled(), "mail_dev_mode": dev_mode()}
+    return {"email_verification": verification_enabled(), "mail_dev_mode": show_code_on_screen()}
 
 
 # ──────────────────────────────────────────────
@@ -1215,6 +1229,25 @@ setup_api(app)
 # ──────────────────────────────────────────────
 # 404  (404page.html)
 # ──────────────────────────────────────────────
+# 화면 주소의 경로 값이 잘못되면(/products/abc) JSON 오류 대신 404 화면. API 는 기존 형식({code, message}) 유지
+_api_validation_handler = app.exception_handlers[RequestValidationError]
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    if not request.url.path.startswith("/api/") and any(e.get("loc", ("",))[0] == "path" for e in exc.errors()):
+        return render(request, "404page.html", status_code=404)
+    return await _api_validation_handler(request, exc)
+
+
+# 너무 큰 ID(/products/99999999999999999999)는 DB 정수 범위를 넘으므로 '없음(404)'으로 처리
+@app.exception_handler(OverflowError)
+async def overflow_handler(request: Request, _exc: OverflowError):
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"code": "NOT_FOUND", "message": "요청한 항목을 찾을 수 없습니다."}, status_code=404)
+    return render(request, "404page.html", status_code=404)
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 404 and not request.url.path.startswith("/api/"):

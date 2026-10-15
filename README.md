@@ -36,7 +36,7 @@
 | 문서 | 내용 |
 |---|---|
 | [01_project_overview](docs/01_project_overview.md) | 기획 개요 |
-| [02_requirements](docs/02_requirements.md) | 기능(FR-01~27)·비기능(NFR-01~09) 요구사항, User Story |
+| [02_requirements](docs/02_requirements.md) | 기능(FR-01~27)·비기능(NFR-01~11) 요구사항, User Story |
 | [03_ui_design](docs/03_ui_design.md) | 화면 목록·흐름 |
 | [04_database_design](docs/04_database_design.md) | 테이블·관계 |
 | [05_api_spec](docs/05_api_spec.md) | REST API 명세 |
@@ -149,6 +149,9 @@ python -m pytest -m pages   # 화면만  /  -m api : API만  /  -m unit : 단위
 - `backend/.env` 의 `SECRET_KEY` 는 길고 무작위인 값으로 바꿉니다. 예시 값 그대로면 서버를 켤 때 경고가 나옵니다.
   만드는 법: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 - 로그인은 같은 이메일로 5번(같은 PC 에서 20번) 틀리면 10분 동안 잠깁니다. 시연 중 잠겼다면 서버를 다시 켜면 풀립니다.
+  여러 사람이 같은 와이파이로 접속하는 발표라면 `.env` 의 `LOGIN_IP_MAX_FAILS`, `EMAIL_SEND_LIMIT_PER_IP` 를 늘리세요.
+- 운영(`COOKIE_SECURE=1`)에서는 메일 서버(`MAIL_*`)를 꼭 설정합니다. 없으면 인증 코드를 화면에 보여 주지 않고 발송을 거부합니다.
+- 분석 CSV 내보내기는 `=`·`+`·`-`·`@` 로 시작하는 칸 앞에 `'` 를 붙여 엑셀에서 수식으로 실행되지 않게 합니다.
 
 ## Git 커밋 규칙
 

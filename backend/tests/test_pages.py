@@ -33,6 +33,11 @@ def test_unknown_page_shows_404(client):
     assert r.status_code == 404 and "존재하지 않는 경로" in r.text
 
 
+def test_favicon_returns_no_content(client):
+    r = client.get("/favicon.ico")
+    assert r.status_code == 204 and not r.content
+
+
 # ── 대시보드 / 상품
 def test_dashboard(page):
     r = page.get("/dashboard")

@@ -56,6 +56,9 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 | 로그인 시도 제한 | 같은 이메일 5회 실패 → 10분 잠금, 같은 IP 20회 실패 → 10분 잠금. 화면(`/login`)과 API(`/auth/login`, 429 `LOGIN_LOCKED`)가 같은 기록 사용. 로그인 성공·비밀번호 변경 시 해제 (`rate_limit.py`) |
 | 비밀번호 변경(찾기) | 이름·이메일(인증 코드)·사업자 등록번호 일치 시 변경, 5회 불일치 시 10분 잠금(이메일·IP 기준, 서버 기록), 변경 후 모든 세션 삭제 |
 | 서명 키 | 화면 안내 메시지 쿠키(`pp_flash`)는 `SECRET_KEY` 로 서명. 비었거나 예시 값이면 서버 시작 시 경고 |
+| 운영 모드 | `COOKIE_SECURE=1` 이면 운영으로 보고, 메일 서버가 없어도 인증 코드를 화면에 보여 주지 않음 (503 + 시작 시 경고). 화면 코드 표시는 로컬 개발에서만 |
+| 제한 값 설정 | 로그인·인증 메일 제한 횟수는 `.env` 로 조정 (`LOGIN_MAX_FAILS`, `LOGIN_LOCK_MINUTES`, `LOGIN_IP_MAX_FAILS`, `EMAIL_SEND_LIMIT_PER_EMAIL`, `EMAIL_SEND_LIMIT_PER_IP`) |
+| CSV 내보내기 | `=`, `+`, `-`, `@` 로 시작하는 칸은 앞에 `'` 를 붙여 엑셀 수식 실행 방지 (`api_v1.csv_safe`) |
 | 내부 API(`/internal/*`) | 관리자 role이 없으므로 로그인 세션이 아닌 API 키(`X-Internal-Key` 헤더 = `.env` 의 `INTERNAL_API_KEY`)로만 허용 |
 
 **시도 제한의 한계:** 기록이 서버 프로세스 메모리에 있으므로 서버를 재시작하면 초기화되고, 여러 프로세스로 실행하면 프로세스마다 따로 셉니다. 이 프로젝트는 프로세스 1개로 운영하며, 규모가 커지면 Redis 같은 공유 저장소로 옮깁니다. 프록시(nginx) 뒤에 배포할 때는 실제 사용자 IP 를 받도록 `uvicorn --proxy-headers` 를 사용합니다 (`10_deployment.md`).

@@ -163,6 +163,11 @@ async def login_required_handler(request: Request, _exc: LoginRequired):
 # ──────────────────────────────────────────────
 # 로그인 / 회원가입 / 로그아웃  (index.html, joinmembership.html)
 # ──────────────────────────────────────────────
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)
+
+
 @app.get("/", name="index")
 def index(request: Request, user=Depends(get_current_user)):
     return redirect(request, "dashboard" if user else "login")

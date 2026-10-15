@@ -26,7 +26,7 @@ def test_sentiment_ratio(api, ids):
 
 def test_summary(api):
     assert api.get(f"{API}/stats/summary").json() == {
-        "total_reviews": 11, "avg_rating": 3.36, "negative_ratio": 0.5455, "risky_count": 3}
+        "total_reviews": 11, "avg_rating": 3.36, "negative_ratio": 0.2727, "risky_count": 3}   # 부정 3 / 11 (3점 리뷰 3건은 중립)
 
 
 def test_stats_product_filter_ownership(api, other_api, ids):

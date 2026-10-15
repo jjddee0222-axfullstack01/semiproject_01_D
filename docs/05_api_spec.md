@@ -8,15 +8,15 @@
 | 인증 | `세션 쿠키 session_id (HttpOnly, Secure, SameSite=Lax) 자동 전송.` (🔓 표시 외 전부 필요) |
 | 페이지네이션 | `?page=1&size=20` → `{items, page, size, total}` |
 | 기간·상품 필터 | `?product_id=&from=YYYY-MM-DD&to=YYYY-MM-DD` |
-| 오류 | 400/422 입력 오류, 401 미인증, 403 권한 없음, 404 없음, 409 충돌 |
+| 오류 | 400/422 입력 오류, 401 미인증, 403 권한 없음, 404 없음, 409 충돌, 429 시도 횟수 초과 (형식 `{code, message}`) |
 | 소유권 | 상품·리뷰·답글·위험키워드는 모두 본인 상품 기준으로만 접근 가능 |
 
 ## 1. 인증·계정 (E1, Must)
 
 | 메서드 | 경로 | 설명 | 응답 | US |
 | --- | --- | --- | --- | --- |
-| POST | `/auth/signup` 🔓 | 회원가입 (email, password, name, mall_name, mall_platform, business_number) | 201 / 409(이메일·사업자번호 중복) / 422 | US-01 |
-| POST | `/auth/login` 🔓 | 로그인, 세션 생성 후 Set-Cookie: session_id 발급 | 200 / 401 | US-02 |
+| POST | `/auth/signup` 🔓 | 회원가입 (email, password, name, mall_name, mall_platform, business_number, **email_code**). `email_code` 는 `POST /email-code` 로 받은 6자리 코드 (`EMAIL_VERIFICATION=0` 이면 생략) | 201 / 400(`EMAIL_CODE_INVALID`) / 409(이메일·사업자번호 중복) / 422 | US-01 |
+| POST | `/auth/login` 🔓 | 로그인, 세션 생성 후 Set-Cookie: session_id 발급. 같은 이메일 5회·같은 IP 20회 실패 시 10분 잠금 (화면 로그인과 공통) | 200 / 401 / 429(`LOGIN_LOCKED`) | US-02 |
 | POST | `/auth/logout` | 로그아웃, 세션 행 삭제와 쿠키 만료 | 204 | US-03 |
 | GET | `/users/me` | 내 정보 조회 | 200 |  |
 | PATCH | `/users/me` | 쇼핑몰명·플랫폼 등 수정 | 200 |  |
@@ -55,7 +55,7 @@
 | 메서드 | 경로 | 설명 | 우선순위 | US |  |
 | --- | --- | --- | --- | --- | --- |
 | GET | `/stats/monthly-trend` | 월별 리뷰 수·평균 평점 `[{month, count, avg_rating}]` | Must | US-12 |  |
-| GET | `/stats/sentiment-ratio` | 긍/부정/중립 비율과 건수 | Should | US-14 |  |
+| GET | `/stats/sentiment-ratio` | 긍/부정/중립 비율과 건수 (중립 = 위험 키워드 없는 3점 리뷰, `rule-v2`) | Should | US-14 |  |
 | GET | `/stats/keywords/top` | 키워드 TOP 10과 빈도 (`?limit=10&polarity=`) | Should | US-13 |  |
 | GET | `/stats/risk-reviews` | 부정 리뷰를 최신순·심각도순으로 정렬한 목록 (`?issue_type=PRODUCT | DELIVERY | PACKAGING`, 페이지네이션) |  |
 | GET | `/stats/issue-types` | 상품 문제 vs 유통·포장 문제 건수 분포 | Should | 핵심 가치 |  |
@@ -70,6 +70,8 @@
 | POST | `/risk-keywords` | 등록 (word, weight) / 409(중복) |
 | PATCH | `/risk-keywords/{id}` | 수정 |
 | DELETE | `/risk-keywords/{id}` | 삭제 |
+
+등록·수정·삭제하면 그 단어가 들어간 기존 리뷰를 바로 다시 분석합니다 (위험 여부·감성·키워드 통계에 즉시 반영, FR-27). 응답 형식은 그대로입니다.
 
 ## 7. 내보내기·LLM 기능
 
@@ -87,3 +89,9 @@
 | POST | `/internal/ingest` | 데이터셋 적재 실행 |
 | POST | `/internal/analyze` | 미분석 리뷰 분석 실행 |
 | GET | `/internal/ingest-logs` | 적재 이력 (중복·결측 건수) |
+
+## 9. 화면 보조 엔드포인트 (`/api/v1` 밖, 로그인 불필요)
+
+| 메서드 | 경로 | 설명 | 응답 |
+| --- | --- | --- | --- |
+| POST | `/email-code` | 이메일 인증 코드 발송 (body: `{purpose: signup\|reset, email}`). 10분 유효, 재발송 60초 뒤, 이메일당 1시간 5회·IP당 20회. 개발 모드(`MAIL_HOST` 없음)에서는 응답에 `dev_code` 포함 | 200 / 400 / 409(가입된 이메일로 signup) / 429 |

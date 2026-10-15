@@ -15,7 +15,7 @@ AI 에이전트(Claude Code 등)에게 작업을 맡길 때 이 파일을 먼저
 - 화면 라우트 `backend/main.py` · REST API `backend/api_v1.py` (`/api/v1`)
 - 테이블 `backend/models.py` · 요청/응답 형식 `backend/schemas.py`
 - 분석 규칙 `backend/analysis.py` · 추천 답글 `backend/reply_drafts.py`
-- 이메일 인증 코드 `backend/email_verify.py` · CSV 적재 `backend/pipeline.py`
+- 이메일 인증 코드 `backend/email_verify.py` · 시도 횟수 제한 `backend/rate_limit.py` · CSV 적재 `backend/pipeline.py`
 - 새 화면 템플릿은 `{% include '_layout_styles.html' %}` + `{% include '_sidebar.html' %}` 로 공통 스타일·모바일 메뉴 사용
 
 ## 반드시 지킬 것
@@ -25,6 +25,9 @@ AI 에이전트(Claude Code 등)에게 작업을 맡길 때 이 파일을 먼저
 - 기존 API URL·DB 구조(테이블·컬럼) 임의 변경 금지. 필요하면 먼저 사람에게 확인
 - 새 라이브러리 설치 전 확인. `requirements.txt` 에 버전과 함께 추가
 - 비밀번호·키는 `backend/.env` 에만. 공유 파일(`setup_mariadb.sql`, `.env.example`)에 실제 값 금지
+- 인증 코드·실패 횟수·잠금 같은 보안 상태는 쿠키(`request.session`)에 저장하지 않음 → `rate_limit.py`·`email_verify.py` 의 서버 저장소 사용
+- 분석 규칙(`analysis.py`)을 바꾸면 `MODEL_VERSION` 을 올림 → 서버 시작 시 예전 결과 자동 재분석
+- 문서는 `docs/01~11` 번호 체계 유지. 문제를 고치면 `docs/08_issue_log.md` 에 기록
 
 ## 작업 완료 조건
 1. `cd backend && python -m pytest` 전부 통과 (새 기능은 테스트도 추가: 화면 `tests/test_pages*.py`, API `tests/test_api_*.py`)

@@ -187,6 +187,12 @@
             color: #2B8A3E;
         }
 
+        .review-box.neutral {
+            background-color: #F8F9FA;
+            border: 1px solid #E9ECEF;
+            color: #495057;
+        }
+
         .review-box.negative {
             background-color: #FFF5F5;
             border: 1px solid #FFE3E3;
@@ -375,11 +381,11 @@
 
             {% for row in rows %}
             {% set r = row.review %}
-            {% set positive = r.analysis.sentiment.value == 'POS' %}
+            {% set tone = {'POS': 'positive', 'NEU': 'neutral'}.get(r.analysis.sentiment.value, 'negative') %}
             <div class="cs-row">
-                <div class="review-box {{ 'positive' if positive else 'negative' }}">
+                <div class="review-box {{ tone }}">
                     <div class="review-top-info">
-                        <span>[{{ '긍정' if positive else '부정' }} 리뷰]{% if r.analysis.severity >= RISK_SEVERITY %} ⚠️{% endif %} {{ r.product.name }}</span>
+                        <span>[{{ {'positive': '긍정', 'neutral': '중립'}.get(tone, '부정') }} 리뷰]{% if r.analysis.severity >= RISK_SEVERITY %} ⚠️{% endif %} {{ r.product.name }}</span>
                         <a class="product-link" href="{{ url_for('product_dashboard', product_id=r.product_id) }}">상품 바로가기</a>
                     </div>
                     <div class="review-date">★ {{ r.rating }} · {{ r.reviewer_name|mask_name }} · {{ r.reviewed_at|dotdate }}</div>

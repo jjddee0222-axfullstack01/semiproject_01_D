@@ -376,7 +376,7 @@
                     <div class="product-name">{{ p.name }}</div>
                     <div class="product-desc">
                         {{ p.category }} · ★ {{ "%.1f"|format(p.avg_rating) }} (리뷰 {{ p.review_count }}개)
-                        · 긍정 {{ p.positive_count }} / 부정 {{ p.negative_count }}
+                        · 긍정 {{ p.positive_count }} / 중립 {{ p.neutral_count }} / 부정 {{ p.negative_count }}
                         {% if p.risky_count %}<span style="color:#FA5252;font-weight:600;"> · ⚠️ 위험 리뷰 {{ p.risky_count }}건</span>{% endif %}
                     </div>
                 </div>

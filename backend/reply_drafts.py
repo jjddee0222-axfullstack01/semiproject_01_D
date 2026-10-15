@@ -1,7 +1,7 @@
 """
 PIN POINT REVIEW - 리뷰 답글 초안 (US-16, CS챗봇 화면)
 
-부정 리뷰는 이슈 유형별 사과 답글, 긍정 리뷰는 감사 답글 초안을 만듭니다.
+부정 리뷰는 이슈 유형별 사과 답글, 중립 리뷰는 감사 + 개선 약속 답글, 긍정 리뷰는 감사 답글 초안을 만듭니다.
 
 지금은 템플릿으로 초안을 만듭니다 (llm_model = "template-v1").
 LLM API 를 연결할 때는 generate_reply_draft() 안에서 API 를 호출하고,
@@ -26,6 +26,8 @@ _BODY = {
 
 
 _THANKS = "소중한 리뷰 남겨 주셔서 진심으로 감사합니다. 앞으로도 만족하실 수 있도록 좋은 상품과 서비스로 보답하겠습니다."
+_NEUTRAL = ("솔직한 리뷰 남겨 주셔서 감사합니다. 아쉬우셨던 점은 꼼꼼히 확인해 더 만족하실 수 있도록 개선하겠습니다.\n"
+            "불편한 점이 있으시면 고객센터나 1:1 문의로 편하게 말씀해 주세요.")
 
 
 def _masked(review: Review) -> str:
@@ -34,9 +36,11 @@ def _masked(review: Review) -> str:
 
 
 def generate_reply_draft(review: Review, mall_name: str) -> tuple[str, str]:
-    """(초안 본문, 사용한 모델 이름) — 긍정 리뷰면 감사 답글, 그 외는 사과 답글"""
+    """(초안 본문, 사용한 모델 이름) — 긍정: 감사 답글 / 중립: 감사 + 개선 약속 / 부정: 사과 답글"""
     if review.analysis and review.analysis.sentiment == Polarity.POS:
         return f"안녕하세요, {_masked(review)} 고객님. {mall_name}입니다.\n{_THANKS}", DRAFT_MODEL
+    if review.analysis and review.analysis.sentiment == Polarity.NEU:
+        return f"안녕하세요, {_masked(review)} 고객님. {mall_name}입니다.\n{_NEUTRAL}\n감사합니다.", DRAFT_MODEL
 
     issue = review.analysis.issue_type if review.analysis and review.analysis.issue_type else IssueType.ETC
     masked = _masked(review)

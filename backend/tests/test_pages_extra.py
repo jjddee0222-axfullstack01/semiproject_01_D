@@ -22,8 +22,8 @@ def test_review_list_all(page):
 
 
 @pytest.mark.parametrize("query, count", [
-    ("sentiment=NEG", 6), ("sentiment=POS", 5), ("risk=1", 3), ("rating=5", 4),
-    ("q=배송", 3), ("issue=PACKAGING", 2), ("period=7", 6), ("replied=yes", 0), ("replied=no", 11),
+    ("sentiment=NEG", 3), ("sentiment=POS", 5), ("sentiment=NEU", 3), ("risk=1", 3), ("rating=5", 4),
+    ("q=배송", 3), ("issue=PACKAGING", 1), ("period=7", 6), ("replied=yes", 0), ("replied=no", 11),
     ("sentiment=NEG&risk=1", 3), ("sentiment=bogus", 11), ("q=%25", 0),
 ])
 def test_review_list_filters(page, query, count):
@@ -84,7 +84,7 @@ def test_compare_defaults_to_first_two(page):
     r = page.get("/compare")
     assert r.status_code == 200 and "상품 비교" in r.text and "한눈에 보는 차이" in r.text
     assert "프리미엄 시그니처 상품 A" in r.text and "에센셜 베이직 아이템 B" in r.text
-    assert "긍정 / 부정 비율" in r.text and "자주 나온 키워드" in r.text
+    assert "긍정 / 중립 / 부정 비율" in r.text and "자주 나온 키워드" in r.text
 
 
 def test_compare_selected_products_and_summary(page, ids):

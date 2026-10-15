@@ -15,7 +15,6 @@ API 문서: http://127.0.0.1:8000/docs
 import csv
 import os
 import re
-import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -35,6 +34,7 @@ try:
     from .api_v1 import setup_api
     from .auth import (LoginRequired, clear_cookie, delete_account, end_all_sessions, end_session,
                        get_current_user, login_required, start_session)
+    from . import rate_limit
     from .email_verify import PURPOSES, check_code, dev_mode, issue_code, verification_enabled
     from .database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                            reanalyze_seller_reviews, seller_risk_keywords, this_month)
@@ -51,6 +51,7 @@ except ImportError:
     from api_v1 import setup_api
     from auth import (LoginRequired, clear_cookie, delete_account, end_all_sessions, end_session,
                       get_current_user, login_required, start_session)
+    import rate_limit
     from email_verify import PURPOSES, check_code, dev_mode, issue_code, verification_enabled
     from database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                           reanalyze_seller_reviews, seller_risk_keywords, this_month)
@@ -69,6 +70,8 @@ BASE_DIR = Path(__file__).resolve().parent
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     print(f"[PIN POINT] DB: {describe_db()}")
+    if warning := rate_limit.secret_key_warning(os.environ.get("SECRET_KEY", "")):
+        print(warning)
     init_db()            # 서버 시작 시 테이블 생성 + (비어 있으면) 데모 데이터
     yield
 
@@ -178,12 +181,25 @@ def login(request: Request,
           password: str = Form(""),
           db: Session = Depends(get_session)):
     email = email.strip().lower()
+    ip = rate_limit.client_ip(request)
+    # 같은 이메일 5번 / 같은 IP 20번 틀리면 10분 잠금 (서버에 기록 → 쿠키를 지워도 유지)
+    if locked := rate_limit.login_locked_seconds(email, ip):
+        flash(request, rate_limit.lock_message(locked), "error")
+        return render(request, "index.html", status_code=429, form={"email": email})
     user = db.scalar(select(User).where(User.email == email))
     if (user is None or user.status != UserStatus.ACTIVE
             or not verify_password(password, user.password_hash)):
-        flash(request, "이메일 또는 비밀번호가 올바르지 않습니다.", "error")
+        left = rate_limit.login_failed(email, ip)
+        if left == 0:
+            message = rate_limit.lock_message(rate_limit.LOGIN_LOCK_SECONDS)
+        elif left <= 2:
+            message = f"이메일 또는 비밀번호가 올바르지 않습니다. ({left}번 더 틀리면 10분 동안 잠깁니다)"
+        else:
+            message = "이메일 또는 비밀번호가 올바르지 않습니다."
+        flash(request, message, "error")
         return render(request, "index.html", status_code=401, form={"email": email})
 
+    rate_limit.login_succeeded(email)
     response = redirect(request, "dashboard")
     start_session(db, user, response)
     return response
@@ -211,7 +227,7 @@ async def email_code(request: Request, db: Session = Depends(get_session)):
         return JSONResponse({"ok": False, "message": "이미 가입된 이메일입니다."}, status_code=409)
     # 비밀번호 변경: 가입되지 않은 이메일이어도 같은 안내를 보여 줌 (가입 여부 노출 방지, 메일은 보내지 않음)
     deliver = purpose == "signup" or (existing is not None and existing.status == UserStatus.ACTIVE)
-    ok, message, dev_code = issue_code(request.session, purpose, email, deliver=deliver)
+    ok, message, dev_code = issue_code(purpose, email, deliver=deliver, ip=rate_limit.client_ip(request))
     payload = {"ok": ok, "message": message}
     if dev_code:
         payload["dev_code"] = dev_code          # 개발 모드(메일 서버 미설정)에서만
@@ -228,9 +244,8 @@ def email_context() -> dict:
 #   이름 + 이메일(+인증 코드) + 사업자 등록 번호가 모두 일치하면 새 비밀번호로 변경
 #   5번 틀리면 10분 잠금, 변경 후에는 모든 기기에서 로그아웃
 # ──────────────────────────────────────────────
-RESET_MAX_FAILS = 5              # 이 횟수만큼 틀리면
-RESET_LOCK_SECONDS = 10 * 60     # 이 시간 동안 잠금
-RESET_FAIL_KEY = "pw_reset_fails"
+RESET_MAX_FAILS = rate_limit.RESET_MAX_FAILS          # 이 횟수만큼 틀리면
+RESET_LOCK_SECONDS = rate_limit.RESET_LOCK_SECONDS    # 이 시간 동안 잠금 (이메일·IP 기준, 서버에 기록)
 
 
 def render_reset(request: Request, status_code: int = 200, form: Optional[dict] = None) -> HTMLResponse:
@@ -252,9 +267,9 @@ def password_reset(request: Request,
                    business_number: str = Form(""),
                    db: Session = Depends(get_session)):
     form = {"name": name.strip(), "email": email.strip().lower(), "business_number": business_number.strip()}
-    fails = request.session.get(RESET_FAIL_KEY) or {"count": 0, "until": 0}
-    if fails["until"] > time.time():
-        minutes = int((fails["until"] - time.time()) // 60) + 1
+    lock_keys = (f"email:{form['email']}", f"ip:{rate_limit.client_ip(request)}")
+    if locked := rate_limit.password_reset.locked_for(*lock_keys):
+        minutes = max(1, (locked + 59) // 60)
         flash(request, f"정보가 여러 번 일치하지 않아 잠겼습니다. {minutes}분 뒤에 다시 시도해 주세요.", "error")
         return render_reset(request, 429, form)
 
@@ -267,7 +282,7 @@ def password_reset(request: Request,
     if new_password != new_password_confirm:
         flash(request, "비밀번호 확인이 일치하지 않습니다.", "error")
         return render_reset(request, 400, form)
-    code_error = check_code(request.session, "reset", form["email"], email_code)
+    code_error = check_code("reset", form["email"], email_code)
     if code_error:
         flash(request, code_error, "error")
         return render_reset(request, 400, form)
@@ -276,14 +291,12 @@ def password_reset(request: Request,
     user = db.scalar(select(User).where(User.email == form["email"], User.status == UserStatus.ACTIVE))
     # 세 값이 모두 일치해야 함. 어느 값이 틀렸는지는 알려 주지 않음 (계정 존재 여부 노출 방지)
     if user is None or user.name != form["name"] or biz is None or user.business_number != biz:
-        fails["count"] += 1
-        if fails["count"] >= RESET_MAX_FAILS:
-            fails = {"count": 0, "until": time.time() + RESET_LOCK_SECONDS}
+        count = rate_limit.password_reset.fail(*lock_keys)
+        if count >= RESET_MAX_FAILS:
             flash(request, f"정보가 {RESET_MAX_FAILS}번 일치하지 않아 {RESET_LOCK_SECONDS // 60}분 동안 잠깁니다.", "error")
         else:
             flash(request, "입력한 정보와 일치하는 계정이 없습니다. 이름, 이메일, 사업자 등록 번호를 확인해 주세요. "
-                           f"({fails['count']}/{RESET_MAX_FAILS})", "error")
-        request.session[RESET_FAIL_KEY] = fails
+                           f"({count}/{RESET_MAX_FAILS})", "error")
         return render_reset(request, 400, form)
 
     if verify_password(new_password, user.password_hash):
@@ -293,7 +306,8 @@ def password_reset(request: Request,
     user.password_hash = hash_password(new_password)
     end_all_sessions(db, user)              # 다른 기기에 남아 있는 로그인도 모두 종료
     db.commit()
-    request.session.pop(RESET_FAIL_KEY, None)
+    rate_limit.password_reset.reset(*lock_keys)
+    rate_limit.login_succeeded(form["email"])           # 비밀번호를 바꿨으면 로그인 잠금도 해제
     response = redirect(request, "login")
     clear_cookie(response)
     flash(request, "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.")
@@ -339,7 +353,7 @@ def signup(request: Request,
     elif db.scalar(select(User.id).where(User.business_number == biz)):
         error, status = "이미 등록된 사업자 등록 번호입니다.", 409
     else:
-        code_error = check_code(request.session, "signup", form["email"], email_code)
+        code_error = check_code("signup", form["email"], email_code)
         if code_error:
             error = code_error
 
@@ -429,6 +443,7 @@ def products(request: Request,
     q = q.strip()[:100]
     positive = func.sum(case((ReviewAnalysis.sentiment == Polarity.POS, 1), else_=0))
     negative = func.sum(case((ReviewAnalysis.sentiment == Polarity.NEG, 1), else_=0))
+    neutral = func.sum(case((ReviewAnalysis.sentiment == Polarity.NEU, 1), else_=0))
     risky = func.sum(case((ReviewAnalysis.severity >= RISK_SEVERITY, 1), else_=0))
     rows = db.execute(
         select(Product,
@@ -436,6 +451,7 @@ def products(request: Request,
                func.coalesce(func.avg(Review.rating), 0).label("avg_rating"),
                func.coalesce(positive, 0).label("positive_count"),
                func.coalesce(negative, 0).label("negative_count"),
+               func.coalesce(neutral, 0).label("neutral_count"),
                func.coalesce(risky, 0).label("risky_count"))
         # LEFT JOIN 이라 visible_reviews() 대신 조인 조건에 VISIBLE 을 넣음 (리뷰 없는 상품도 표시)
         .outerjoin(Review, (Review.product_id == Product.id) & (Review.status == ReviewStatus.VISIBLE))
@@ -448,8 +464,8 @@ def products(request: Request,
 
     items = [{"id": p.id, "name": p.name, "category": p.category or "",
               "review_count": n, "avg_rating": float(avg), "positive_count": int(pos),
-              "negative_count": int(neg), "risky_count": int(rk)}
-             for p, n, avg, pos, neg, rk in rows]
+              "negative_count": int(neg), "neutral_count": int(neu), "risky_count": int(rk)}
+             for p, n, avg, pos, neg, neu, rk in rows]
     return render(request, "products.html", active_menu="products", products=items, q=q)
 
 
@@ -718,6 +734,7 @@ def product_profile(db: Session, user: User, product: Product) -> dict:
     n = len(reviews)
     pos = sum(1 for r in analyzed if r.analysis.sentiment == Polarity.POS)
     neg = sum(1 for r in analyzed if r.analysis.sentiment == Polarity.NEG)
+    neu = sum(1 for r in analyzed if r.analysis.sentiment == Polarity.NEU)
     issues = {label: sum(1 for r in analyzed if r.analysis.issue_type and r.analysis.issue_type.value == key)
               for key, label in ISSUE_LABELS.items()}
     keyword_rows = db.execute(
@@ -732,7 +749,8 @@ def product_profile(db: Session, user: User, product: Product) -> dict:
     return {
         "product": product, "review_count": n,
         "avg_rating": sum(r.rating for r in reviews) / n if n else None,
-        "positive": pos, "negative": neg, "analyzed": len(analyzed),
+        "positive": pos, "negative": neg, "neutral": neu, "analyzed": len(analyzed),
+        "neutral_ratio": neu / len(analyzed) if analyzed else 0,
         "positive_ratio": pos / len(analyzed) if analyzed else 0, "negative_ratio": neg / len(analyzed) if analyzed else 0,
         "risky": sum(1 for r in analyzed if r.analysis.severity >= RISK_SEVERITY),
         "issues": issues, "keywords": keyword_rows, "buyers": stat.buyers if stat else 0,

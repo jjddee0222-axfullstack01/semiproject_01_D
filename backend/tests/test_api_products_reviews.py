@@ -35,7 +35,7 @@ def test_product_list_bad_query(api, query):
 
 def test_product_detail(api, ids):
     d = api.get(f"{API}/products/{ids['product_a']}").json()
-    assert (d["review_count"], d["avg_rating"], d["positive_count"], d["negative_count"], d["risky_count"]) == (5, 3.4, 2, 3, 1)
+    assert (d["review_count"], d["avg_rating"], d["positive_count"], d["negative_count"], d["risky_count"]) == (5, 3.4, 2, 1, 1)   # 3점 리뷰 2건은 중립
 
 
 def test_product_not_found_and_forbidden(api, other_api, ids):
@@ -51,7 +51,8 @@ def test_review_list_and_filters(api, ids):
     body = api.get(f"{base}?size=2").json()
     assert body["total"] == 5 and len(body["items"]) == 2
     assert body["items"][0]["reviewed_at"] >= body["items"][1]["reviewed_at"]          # 최신순
-    assert api.get(f"{base}?sentiment=NEG").json()["total"] == 3
+    assert api.get(f"{base}?sentiment=NEG").json()["total"] == 1
+    assert api.get(f"{base}?sentiment=NEU").json()["total"] == 2           # 위험 키워드 없는 3점 리뷰
     assert api.get(f"{base}?rating=5").json()["total"] == 2
     today = date.today()
     assert api.get(f"{base}?from={today - timedelta(days=6)}&to={today}").json()["total"] == 3

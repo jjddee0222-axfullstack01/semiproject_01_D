@@ -38,8 +38,20 @@ python -m pytest                                # 전체 실행 (또는 run_test
 | `test_api_products_reviews.py` | 상품, 리뷰 조회·필터, 블라인드·복구 |
 | `test_api_replies.py` | CS 답글 트리, 권한, 연쇄 삭제 |
 | `test_api_stats.py` | 월별 추이, 긍·부정 비율, 위험 리뷰, 이슈 유형, 요약, 키워드 TOP, 비교 |
-| `test_api_risk_keywords.py` | 위험 키워드 CRUD |
+| `test_api_risk_keywords.py` | 위험 키워드 CRUD, 추가·수정·삭제 시 기존 리뷰 즉시 재분석 |
 | `test_api_exports_suggestions.py` | CSV 내보내기, 사과 답글 초안 |
 | `test_api_internal.py` | 내부 API 키, CSV 적재(중복·결측), 분석·재분석 |
+| `test_pages_analysis_cs.py` | 쇼핑몰 분석 화면·리포트, CS챗봇(추천 답글 수정·복사·처리 완료) |
+| `test_pages_day6.py` | 차트 화면, 블라인드 화면, 상품 검색, 위험 키워드 관리(즉시 반영) |
+| `test_pages_upload.py` | 리뷰 CSV 업로드 (인코딩·중복·오류 행·크기 제한) |
+| `test_pages_review_filter.py` | 상품별 대시보드 리뷰 필터·정렬 |
+| `test_pages_password_reset.py` | 비밀번호 변경하기 (정보 일치·잠금·세션 종료) |
+| `test_pages_email_verify.py` | 이메일 인증 코드 (발급·만료·1회용·5회 오류·메일 발송), 탈퇴 완료 화면 |
+| `test_pages_extra.py` | 리뷰 목록, 업로드 이력, 상품 비교, 대시보드 '처리할 일', 모바일 메뉴 |
+| `test_neutral_sentiment.py` | 중립(3점) 분류, 중립 답글 초안, 서버 시작 시 예전 분석 자동 갱신 |
+| `test_security_limits.py` | 인증 코드 쿠키 재사용 차단, 발송 횟수 제한, 로그인·비밀번호 찾기 잠금, API 회원가입 인증, SECRET_KEY 점검 |
+
+보안 테스트는 시도 기록(서버 메모리)을 테스트마다 비웁니다 (`conftest.py` 의 `fresh_db`).
+테스트 계획과 결과는 [docs/07_test_plan.md](../../docs/07_test_plan.md), [docs/09_test_result.md](../../docs/09_test_result.md) 에 있습니다.
 
 새 기능을 만들면 같은 방식으로 `test_*.py` 에 테스트를 추가하세요.

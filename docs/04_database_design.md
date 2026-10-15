@@ -44,5 +44,5 @@
 - **블라인드 = 소프트 삭제 (D2)**: 리뷰를 지우지 않고 `status = BLINDED` + 사유·처리자·시각 기록. 통계·위험 리뷰·키워드·CSV 는 모두 `VISIBLE` 만 집계
 - **탈퇴 = 하드 삭제 (D5)**: `users` 행을 삭제. 외래키 규칙에 따라 세션·상품(→ 리뷰·분석·키워드 연결·답글·블라인드 이력)·위험 키워드·월별 통계는 `CASCADE` 로 함께 삭제, `feedbacks.user_id` 등은 `SET NULL`. 공용 키워드 사전(`keywords`)은 유지. 행이 사라지므로 같은 이메일·사업자번호로 재가입 가능 (UNIQUE 유지)
 - **소유권**: 상품·리뷰·답글·위험 키워드는 `products.seller_id` 가 로그인한 셀러인 것만 접근 (API 403, 화면 404)
-- **재분석 범위 식별**: `review_analysis.model_version` (지금은 `rule-v1`)
+- **재분석 범위 식별**: `review_analysis.model_version` (지금은 `rule-v2`: 위험 키워드 없는 3점 리뷰를 중립으로 분류. 서버를 켤 때 예전 버전 결과는 자동 재분석)
 - **임베딩 (D6)**: `products.description_embedding`, `reviews.content_embedding` JSON 컬럼 (현재 미사용, 컬럼만 유지)

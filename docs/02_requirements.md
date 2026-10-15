@@ -35,16 +35,32 @@
 | FR-23 | 사용자는 CSV 업로드 이력(추가·중복·오류 건수)을 확인할 수 있어야 한다. | Could | 업로드 이력 (`/products/uploads`) | US-09 |
 | FR-24 | 사용자는 대시보드에서 지금 처리할 일(미답변 위험 리뷰 등)을 보고 바로 이동할 수 있어야 한다. | Should | 대시보드 '처리할 일' | US-15 |
 | FR-25 | 모든 화면은 휴대폰 폭(768px 이하)에서도 사용할 수 있어야 한다. | Should | 공통 (사이드바 ☰ 메뉴) | 비기능 |
+| FR-26 | 시스템은 리뷰를 긍정·중립·부정으로 분류해야 한다. 위험 키워드가 없는 3점 리뷰는 중립으로 분류한다. | Should | 분석 규칙 `rule-v2` · 긍/부정/중립 차트·리뷰 목록 필터 | US-11, US-14 |
+| FR-27 | 위험 키워드를 추가·수정·삭제하면 그 단어가 들어간 기존 리뷰에 바로 반영되어야 한다. | Should | 설정 · `POST·PATCH·DELETE /risk-keywords` | FR-18 보완 |
 
-> 변경 이력: 처음 목록의 '6. CS답글'은 FR-13 으로, '13. 경쟁사 비교'는 FR-15, '14. 쇼핑몰 바로가기'는 FR-16 으로 번호를 옮겨 아래 Epic 표와 맞췄습니다. 블라인드(FR-06), 쇼핑몰 분석(FR-17), 위험 키워드(FR-18), CSV(FR-19)를 추가했습니다.
+> 변경 이력: 처음 목록의 '6. CS답글'은 FR-13 으로, '13. 경쟁사 비교'는 FR-15, '14. 쇼핑몰 바로가기'는 FR-16 으로 번호를 옮겨 아래 Epic 표와 맞췄습니다. 블라인드(FR-06), 쇼핑몰 분석(FR-17), 위험 키워드(FR-18), CSV(FR-19)를 추가했습니다. 9일차 품질 점검에서 중립 분류(FR-26), 위험 키워드 즉시 반영(FR-27), 비기능 요구사항(NFR-01~09)을 추가했습니다.
 
 **3.MoSCoW 우선순위**
 Must - FR-01~08
-Should - FR-09~13, FR-17~22, FR-24~25
+Should - FR-09~13, FR-17~22, FR-24~27
 Could - FR-14~16, FR-23
 Won't (이번 범위 제외) - 새 감성 분석 모델 학습, 소셜 로그인
 
 필수 기능은 Must와 Should, 선택 기능은 Could
+
+**3-1. 비기능 요구사항 (보안·품질)**
+
+| ID | 요구사항 | 구현 | 확인 |
+|---|---|---|---|
+| NFR-01 | 비밀번호는 단방향 해시(솔트 포함)로 저장한다. | PBKDF2-SHA256 (`security.py`) | `test_unit.py` |
+| NFR-02 | 같은 이메일로 로그인을 5번 틀리면 10분 동안 잠근다. 같은 IP 에서 20번 틀려도 잠근다. 화면과 API 가 같은 기록을 쓴다. | `rate_limit.py` (서버 메모리) | `test_security_limits.py` |
+| NFR-03 | 비밀번호 찾기는 정보 불일치 5번이면 10분 동안 잠그며, 브라우저 쿠키를 지워도 풀리지 않는다. | `rate_limit.py` (이메일·IP 기준) | `test_security_limits.py` |
+| NFR-04 | 이메일 인증 코드는 서버에만 저장하고 10분 유효, 1회용, 5번 틀리면 폐기한다. 발송은 이메일당 1시간 5회, IP당 1시간 20회로 제한한다. | `email_verify.py` | `test_pages_email_verify.py`, `test_security_limits.py` |
+| NFR-05 | 회원가입은 화면과 REST API 모두 이메일 인증을 거친다. | `POST /api/v1/auth/signup` 의 `email_code` | `test_security_limits.py` |
+| NFR-06 | 셀러는 자기 상품의 데이터만 볼 수 있다 (API 403, 화면 404). | 소유권 검사 | `test_api_*.py`, `test_pages*.py` |
+| NFR-07 | 통계·키워드·CSV 집계는 블라인드되지 않은 리뷰(`status='VISIBLE'`)만 사용한다. | `api_v1._scope`, `visible_reviews()` | `test_models.py`, `test_api_stats.py` |
+| NFR-08 | 서버 서명 키(`SECRET_KEY`)가 비었거나 예시 값이면 서버 시작 시 경고한다. | `rate_limit.secret_key_warning` | `test_security_limits.py` |
+| NFR-09 | 모든 자동 테스트가 통과한 상태에서만 커밋한다. Must 기능 정상 동작률 100% | pytest | `docs/09_test_result.md` |
 
 **4.프로젝트 범위 조정**
 데이터 요구 사항

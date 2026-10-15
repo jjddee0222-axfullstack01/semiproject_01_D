@@ -51,7 +51,7 @@ def test_analysis_rate_down(page, session):
 def test_shop_report_rules(session):
     reviews = session.scalars(select(m.Review)).all()
     report = shop_report(reviews)
-    assert report["positive_count"] + report["negative_count"] == 11
+    assert (report["positive_count"], report["negative_count"]) == (5, 3)     # 나머지 3건은 중립(3점)
     assert report["recommendations"] and report["issue_counts"]
     assert shop_report([])["strengths"] == "아직 분석된 리뷰가 없습니다."
 

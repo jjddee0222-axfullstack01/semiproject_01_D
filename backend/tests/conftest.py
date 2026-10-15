@@ -49,6 +49,8 @@ import security  # noqa: E402
 security._ITERATIONS = 1_000      # 비밀번호 해시를 가볍게 → 테스트 속도 향상 (검증 로직은 동일)
 
 import database  # noqa: E402
+import email_verify  # noqa: E402
+import rate_limit  # noqa: E402
 import db  # noqa: E402
 import main  # noqa: E402
 import models  # noqa: E402
@@ -70,6 +72,8 @@ def fresh_db():
     """테스트마다 테이블을 새로 만들고 데모 데이터 입력"""
     models.Base.metadata.drop_all(db.engine)
     database.init_db()
+    rate_limit.clear_all()            # 로그인·비밀번호 찾기 잠금 기록 (서버 메모리)
+    email_verify.clear_all()          # 발급된 인증 코드·발송 횟수 (서버 메모리)
     yield
 
 

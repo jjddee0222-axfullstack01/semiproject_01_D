@@ -1,5 +1,5 @@
 """
-PIN POINT REVIEW - 리뷰 분석 (규칙 기반, model_version = "rule-v1")
+PIN POINT REVIEW - 리뷰 분석 (규칙 기반, model_version = "rule-v2")
 
 ERD의 REVIEW_ANALYSIS 컬럼을 채운다.
   sentiment (POS/NEG/NEU) · sentiment_score · severity (0~3) · issue_type (PRODUCT/DELIVERY/PACKAGING/ETC)
@@ -17,7 +17,7 @@ try:
 except ImportError:
     from models import IssueType, Polarity
 
-MODEL_VERSION = "rule-v1"
+MODEL_VERSION = "rule-v2"     # v2: 위험 키워드 없는 3점 리뷰를 중립(NEU)으로 분류
 
 # severity 가 이 값 이상이면 '위험 리뷰' (대시보드 상단 노출 대상)
 RISK_SEVERITY = 2
@@ -96,8 +96,10 @@ def analyze_review(content: str, rating: int, risk_keywords: Iterable[tuple[str,
               2: 평점 ≤ 2, 또는 위험 키워드 포함
               1: 평점 3 (아쉬움)
               0: 그 외
-    sentiment : 평점 ≥ 4 이고 위험(severity ≥ 2)이 아니면 POS, 그 외 NEG
-                (NEU 는 감성 모델 도입 시 사용)
+    sentiment : POS  평점 ≥ 4 이고 위험(severity ≥ 2)이 아님
+                NEU  평점 3 이고 위험 키워드가 없음 ('그럭저럭', '조금 아쉬움' 정도의 리뷰)
+                NEG  그 외 (평점 1~2, 또는 위험 키워드가 들어간 리뷰)
+    issue_type: 부정(NEG) 리뷰만 (상품/배송/포장/기타)
     """
     weight = risk_weight(content, risk_keywords)
     if weight >= 3 or (rating <= 2 and weight > 0):
@@ -109,7 +111,12 @@ def analyze_review(content: str, rating: int, risk_keywords: Iterable[tuple[str,
     else:
         severity = 0
 
-    sentiment = Polarity.POS if rating >= 4 and severity < RISK_SEVERITY else Polarity.NEG
+    if rating >= 4 and severity < RISK_SEVERITY:
+        sentiment = Polarity.POS
+    elif rating == 3 and weight == 0:
+        sentiment = Polarity.NEU
+    else:
+        sentiment = Polarity.NEG
 
     issue_type = None
     if sentiment == Polarity.NEG:
@@ -130,8 +137,13 @@ POSITIVE_ONLY_ASPECTS = {"재구매·추천"}     # '재구매·추천 불만' �
 
 def extract_keywords(content: str, sentiment: Polarity,
                      risk_keywords: Iterable[tuple[str, int]]) -> list[tuple[str, Polarity, float]]:
-    """리뷰 1건 → [(키워드, 극성, 점수)]. 점수는 리뷰 안에서의 중요도(0~1)"""
+    """리뷰 1건 → [(키워드, 극성, 점수)]. 점수는 리뷰 안에서의 중요도(0~1)
+
+    중립(NEU) 리뷰는 '만족'/'불만' 어느 쪽도 아니므로 항목 키워드를 만들지 않음 (키워드 TOP 10 은 긍정·부정만)
+    """
     result: dict[str, tuple[Polarity, float]] = {}
+    if sentiment == Polarity.NEU:
+        return []
     polarity = Polarity.POS if sentiment == Polarity.POS else Polarity.NEG
     suffix = "만족" if polarity == Polarity.POS else "불만"
     for aspect in aspects_in(content):
@@ -184,7 +196,7 @@ def summarize_reviews(reviews: list) -> tuple[str, str]:
 
 # ──────────────────────────────────────────────
 # 쇼핑몰 분석 리포트 (analysis.html 의 'AI 분석 봇 리포트')
-#   지금은 규칙 기반(rule-v1). LLM 을 붙일 때는 shop_report() 의 반환 형식만 유지하면
+#   지금은 규칙 기반(rule-v2). LLM 을 붙일 때는 shop_report() 의 반환 형식만 유지하면
 #   화면(템플릿)은 그대로 쓸 수 있다.
 # ──────────────────────────────────────────────
 ISSUE_LABELS = {

@@ -96,12 +96,31 @@ def _save_keywords(db: Session, review: Review, found: list) -> None:
 
 
 def init_db() -> None:
-    """테이블 생성 + 비어 있으면 데모 데이터 입력"""
+    """테이블 생성 + 비어 있으면 데모 데이터 입력 + 예전 규칙으로 분석된 리뷰는 현재 규칙으로 다시 분석"""
     create_tables()
     with SessionLocal() as db:
         if db.scalar(select(User.id).limit(1)) is None:
             _seed(db)
             db.commit()
+        count = reanalyze_outdated(db)
+        if count:
+            db.commit()
+            print(f"[PIN POINT] 분석 규칙이 {MODEL_VERSION} 로 바뀌어 리뷰 {count}건을 다시 분석했습니다.")
+
+
+def reanalyze_outdated(db: Session) -> int:
+    """model_version 이 현재(MODEL_VERSION)와 다른 분석 결과를 다시 분석 (규칙을 바꾼 뒤 서버를 켜면 자동 실행)"""
+    reviews = db.scalars(
+        select(Review).join(Review.analysis).where(ReviewAnalysis.model_version != MODEL_VERSION)
+        .options(selectinload(Review.analysis), selectinload(Review.keyword_links), selectinload(Review.product))
+    ).all()
+    cache: dict[int, list[tuple[str, int]]] = {}
+    for review in reviews:
+        seller_id = review.product.seller_id
+        if seller_id not in cache:
+            cache[seller_id] = seller_risk_keywords(db, seller_id)
+        analyze_and_save(db, review, cache[seller_id])
+    return len(reviews)
 
 
 def _seed(db: Session) -> None:

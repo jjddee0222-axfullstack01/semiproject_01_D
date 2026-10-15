@@ -138,13 +138,15 @@ ERROR_RESPONSES = {
 # 1. 인증·계정 (E1)
 # ══════════════════════════════════════════════
 class SignupRequest(RequestModel):
-    """POST /auth/signup  → 201 / 409(이메일·사업자번호 중복) / 422"""
+    """POST /auth/signup  → 201 / 400(인증 코드 오류) / 409(이메일·사업자번호 중복) / 422"""
     email: str = Field(..., max_length=255, examples=["seller@pinpoint.kr"])
     password: str = Field(..., examples=["Pinpoint1!"])
     name: str = Field(..., min_length=1, max_length=50)
     mall_name: str = Field(..., min_length=1, max_length=100)
     mall_platform: MallPlatform
     business_number: str = Field(..., examples=["123-45-67890"])
+    email_code: Optional[str] = Field(None, max_length=6, description="이메일 인증 코드 (POST /email-code 로 발급, "
+                                      "EMAIL_VERIFICATION=0 이면 생략 가능)", examples=["123456"])
 
     _email = field_validator("email")(normalize_email)
     _password = field_validator("password")(validate_password)
@@ -152,7 +154,7 @@ class SignupRequest(RequestModel):
 
 
 class LoginRequest(RequestModel):
-    """POST /auth/login  → 200 + Set-Cookie: session_id / 401"""
+    """POST /auth/login  → 200 + Set-Cookie: session_id / 401 / 429(실패가 많아 10분 잠금)"""
     email: str = Field(..., max_length=255)
     password: str = Field(..., min_length=1)
 

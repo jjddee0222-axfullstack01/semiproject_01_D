@@ -92,6 +92,7 @@
 
         .ratio-bar .pos { background-color: #1C7ED6; }
         .ratio-bar .neg { background-color: #E03131; }
+        .ratio-bar .neu { background-color: #ADB5BD; }
 
         .ratio-legend {
             display: flex;
@@ -183,14 +184,16 @@
                     <div class="metric"><div class="label">위험 리뷰</div><div class="value">{{ prof.risky }}</div></div>
                 </div>
 
-                <div class="section-label">긍정 / 부정 비율</div>
+                <div class="section-label">긍정 / 중립 / 부정 비율</div>
                 {% if prof.analyzed %}
-                <div class="ratio-bar" role="img" aria-label="긍정 {{ (prof.positive_ratio * 100)|round|int }}%, 부정 {{ (prof.negative_ratio * 100)|round|int }}%">
+                <div class="ratio-bar" role="img" aria-label="긍정 {{ (prof.positive_ratio * 100)|round|int }}%, 중립 {{ (prof.neutral_ratio * 100)|round|int }}%, 부정 {{ (prof.negative_ratio * 100)|round|int }}%">
                     {% if prof.positive %}<div class="pos" style="width: {{ prof.positive_ratio * 100 }}%"></div>{% endif %}
+                    {% if prof.neutral %}<div class="neu" style="width: {{ prof.neutral_ratio * 100 }}%"></div>{% endif %}
                     {% if prof.negative %}<div class="neg" style="width: {{ prof.negative_ratio * 100 }}%"></div>{% endif %}
                 </div>
                 <div class="ratio-legend">
                     <span>긍정 {{ prof.positive }}건 ({{ (prof.positive_ratio * 100)|round|int }}%)</span>
+                    <span>중립 {{ prof.neutral }}건 ({{ (prof.neutral_ratio * 100)|round|int }}%)</span>
                     <span>부정 {{ prof.negative }}건 ({{ (prof.negative_ratio * 100)|round|int }}%)</span>
                 </div>
                 {% else %}<div class="muted">분석된 리뷰가 없습니다.</div>{% endif %}

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from analysis import (DEFAULT_RISK_KEYWORDS, RISK_SEVERITY, analyze_review, clean_text,
-                      summarize_reviews)
+                      extract_keywords, summarize_reviews)
 from models import IssueType, Polarity
 from security import hash_password, hash_session_token, new_session_token, verify_password
 
@@ -31,7 +31,8 @@ def test_clean_text(raw, expected):
     ("벌레가 나왔어요", 5, 3, Polarity.NEG),                          # 가중치 3 키워드
     ("그냥 별로예요", 2, 2, Polarity.NEG),                            # 낮은 평점만
     ("환불했어요", 5, 2, Polarity.NEG),                               # 위험 키워드만 (가중치 2)
-    ("색감이 조금 어두워요", 3, 1, Polarity.NEG),                     # 평점 3 = 아쉬움
+    ("색감이 조금 어두워요", 3, 1, Polarity.NEU),                     # 평점 3 + 위험 키워드 없음 = 중립
+    ("색감이 어둡고 교환하고 싶어요", 3, 2, Polarity.NEG),           # 평점 3 이라도 위험 키워드가 있으면 부정
     ("배송 빠르고 좋아요", 5, 0, Polarity.POS),
     ("파손 없이 잘 왔어요", 5, 0, Polarity.POS),                      # '파손 없이' 는 위험 아님
 ])
@@ -87,3 +88,11 @@ def test_session_token_is_random_and_hashed():
     assert a != b and len(a) >= 40
     digest = hash_session_token(a)
     assert len(digest) == 64 and digest != a and digest == hash_session_token(a)
+
+
+# ── 중립(NEU) 분류 (rule-v2)
+def test_neutral_review_has_no_issue_or_keywords():
+    result = analyze_review("그럭저럭 쓸만해요. 배송은 보통이었어요", 3, DEFAULT_RISK_KEYWORDS)
+    assert (result.sentiment, result.severity, result.issue_type) == (Polarity.NEU, 1, None)
+    assert extract_keywords("그럭저럭 쓸만해요. 배송은 보통이었어요", Polarity.NEU, DEFAULT_RISK_KEYWORDS) == []
+

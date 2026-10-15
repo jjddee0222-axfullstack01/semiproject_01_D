@@ -25,6 +25,8 @@ from sqlalchemy.orm import Session, selectinload
 try:
     from .analysis import MODEL_VERSION, RISK_SEVERITY
     from .auth import clear_cookie, delete_account, end_session, login_required, start_session
+    from . import rate_limit
+    from .email_verify import check_code
     from .database import add_default_risk_keywords, analyze_and_save, reanalyze_seller_reviews, seller_risk_keywords
     from .db import get_session
     from .models import (BlindAction, IngestLog, IssueType, Keyword, Polarity, Product,
@@ -37,6 +39,8 @@ try:
 except ImportError:
     from analysis import MODEL_VERSION, RISK_SEVERITY
     from auth import clear_cookie, delete_account, end_session, login_required, start_session
+    import rate_limit
+    from email_verify import check_code
     from database import add_default_risk_keywords, analyze_and_save, reanalyze_seller_reviews, seller_risk_keywords
     from db import get_session
     from models import (BlindAction, IngestLog, IssueType, Keyword, Polarity, Product,
@@ -164,6 +168,9 @@ def api_signup(body: S.SignupRequest, db: DB):
         raise ApiError(409, "EMAIL_DUPLICATED", "이미 가입된 이메일입니다.")
     if db.scalar(select(User.id).where(User.business_number == body.business_number)):
         raise ApiError(409, "BUSINESS_NUMBER_DUPLICATED", "이미 등록된 사업자 등록 번호입니다.")
+    # 화면 회원가입과 같은 이메일 인증 (API 로 인증을 건너뛸 수 없게)
+    if code_error := check_code("signup", body.email, body.email_code or ""):
+        raise ApiError(400, "EMAIL_CODE_INVALID", code_error)
     user = User(email=body.email, password_hash=hash_password(body.password), name=body.name,
                 mall_name=body.mall_name, mall_platform=body.mall_platform,
                 business_number=body.business_number)
@@ -174,11 +181,16 @@ def api_signup(body: S.SignupRequest, db: DB):
 
 
 @router.post("/auth/login", response_model=S.UserOut, tags=["인증·계정"])
-def api_login(body: S.LoginRequest, db: DB):
+def api_login(body: S.LoginRequest, request: Request, db: DB):
+    ip = rate_limit.client_ip(request)
+    if locked := rate_limit.login_locked_seconds(body.email, ip):
+        raise ApiError(429, "LOGIN_LOCKED", rate_limit.lock_message(locked))
     user = db.scalar(select(User).where(User.email == body.email))
     if (user is None or user.status != UserStatus.ACTIVE
             or not verify_password(body.password, user.password_hash)):
+        rate_limit.login_failed(body.email, ip)
         raise ApiError(401, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.")
+    rate_limit.login_succeeded(body.email)
     response = JSONResponse(S.UserOut.model_validate(user).model_dump(mode="json"))
     start_session(db, user, response)              # Set-Cookie: session_id
     return response

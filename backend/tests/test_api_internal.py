@@ -83,10 +83,10 @@ def test_ingest_unknown_seller(client, dataset):
 def test_analyze_pending_and_reanalyze(client, session):
     session.execute(delete(m.ReviewAnalysis)); session.commit()
     r = client.post(f"{API}/internal/analyze", json={"limit": 5}, headers=INTERNAL_HEADERS)
-    assert r.json() == {"analyzed_count": 5, "model_version": "rule-v1"}
+    assert r.json() == {"analyzed_count": 5, "model_version": "rule-v2"}
     assert client.post(f"{API}/internal/analyze", json={"limit": 100}, headers=INTERNAL_HEADERS).json()["analyzed_count"] == 6
     assert client.post(f"{API}/internal/analyze", json={"limit": 100}, headers=INTERNAL_HEADERS).json()["analyzed_count"] == 0
-    r = client.post(f"{API}/internal/analyze", json={"limit": 100, "reanalyze_model_version": "rule-v1"},
+    r = client.post(f"{API}/internal/analyze", json={"limit": 100, "reanalyze_model_version": "rule-v2"},
                     headers=INTERNAL_HEADERS)
     assert r.json()["analyzed_count"] == 11
 

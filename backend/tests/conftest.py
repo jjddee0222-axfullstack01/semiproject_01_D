@@ -38,7 +38,7 @@ else:
     _tmp_dir = tempfile.mkdtemp(prefix="pinpoint_test_")
     os.environ["DATABASE_URL"] = "sqlite:///" + Path(_tmp_dir, "test.db").as_posix()
 os.environ["INTERNAL_API_KEY"] = "test-internal-key"
-os.environ["SECRET_KEY"] = "test-secret-key"
+os.environ["SECRET_KEY"] = "pytest-only-secret-key-0123456789"   # 경고 목록에 없는 충분히 긴 값
 os.environ["COOKIE_SECURE"] = "0"
 # 이메일 인증 코드: 기존 테스트는 끄고(0), 인증 테스트에서만 monkeypatch 로 켬. 메일 서버는 사용하지 않음(개발 모드)
 os.environ["EMAIL_VERIFICATION"] = "0"

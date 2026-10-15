@@ -10,8 +10,8 @@
 | 구분 | 건수 | 상태 |
 |---|---|---|
 | 높음 | 6 | 모두 해결 |
-| 중간 | 6 | 모두 해결 |
-| 낮음 | 4 | 모두 해결 |
+| 중간 | 9 | 모두 해결 |
+| 낮음 | 8 | 모두 해결 |
 
 ## 이슈 목록
 
@@ -33,6 +33,13 @@
 | I-14 | 9일차 점검 | 중간 | 서명 키(`SECRET_KEY`)를 예시 값 그대로 써도 아무 경고가 없음 | 시작 시 점검 없음 | 비었거나 예시 값이면 서버 시작 시 경고 문구 출력 | `test_secret_key_warning` |
 | I-15 | 9일차 점검 | 낮음 | 쓰지 않는 시안 `frontend/passwordreset_new.html` 이 저장소에 남아 있음 | 비밀번호 변경 화면을 Figma 기준 한 화면으로 바꾼 뒤 정리하지 않음 | 이번 커밋에서 `git rm frontend/passwordreset_new.html` 로 삭제 | 저장소 파일 목록 |
 | I-16 | 9일차 점검 | 낮음 | `backend/tests/__pycache__/*.pyc` 14개가 저장소에 올라가 있음 | `.gitignore` 에 `__pycache__/` 를 넣기 전에 커밋되어 계속 추적됨 | `git rm -r --cached backend/tests/__pycache__` 로 추적 해제 (파일은 PC 에 남음) | `git ls-files \| grep pyc` 결과 0건 |
+| I-17 | 10일차 점검 (2026-10-15) | 중간 | 리뷰 CSV 내보내기에 엑셀 수식이 그대로 들어감. 본문이 `=HYPERLINK("http://...","클릭")` 이면 엑셀에서 열 때 링크·수식으로 동작 (CSV 수식 주입) | 고객이 쓴 리뷰 본문·작성자명을 그대로 CSV 칸에 씀 | `=`, `+`, `-`, `@` 로 시작하는 글자 칸 앞에 `'` 를 붙여 글자로 취급 (`api_v1.csv_safe`) | `test_review_fixes.py::test_review_export_neutralizes_formula`, `test_csv_safe` |
+| I-18 | 10일차 점검 | 중간 | 메일 서버 없이 HTTPS 운영 설정(`COOKIE_SECURE=1`)으로 배포하면 인증 코드가 화면에 표시됨 → 공개 정보(이름·이메일·사업자 번호)만으로 남의 비밀번호 변경 가능, 가입 여부도 드러남 | `MAIL_HOST` 가 없으면 운영 여부와 관계없이 개발 모드로 동작 | 운영 설정에서는 코드를 화면에 보여 주지 않고 503 "메일 서버 미설정" 안내, 서버 시작 시 경고 (`email_verify.production_mode`) | `test_production_without_mail_server_refuses`, `test_production_with_mail_server_sends`, `test_local_dev_mode_still_shows_code` |
+| I-19 | 10일차 점검 | 중간 | 발표장·강의실처럼 같은 와이파이(같은 IP)를 쓰는 여러 사람이 접속하면 IP 기준 제한(로그인 실패 20회, 인증 메일 20회/시간)에 함께 걸려 모두 막힐 수 있음 | 제한 값이 코드에 고정 | `.env` 의 `LOGIN_MAX_FAILS`, `LOGIN_LOCK_MINUTES`, `LOGIN_IP_MAX_FAILS`, `EMAIL_SEND_LIMIT_PER_EMAIL`, `EMAIL_SEND_LIMIT_PER_IP` 로 조정 가능 (`rate_limit.env_int`) | `test_env_int` |
+| I-20 | 10일차 점검 | 낮음 | `/products/abc` 는 404 화면 대신 JSON 오류(422), `/products/99999999999999999999` 는 서버 오류(500) | 경로 값 검증 오류와 정수 범위 초과를 화면용으로 처리하지 않음 | 화면은 404 화면, API 는 `{code: NOT_FOUND}` 404 (API 의 형식 오류 응답은 그대로) | `test_bad_product_path_shows_404_page`, `test_bad_product_id_in_api` |
+| I-21 | 10일차 점검 | 낮음 | 중립 도입 후에도 분석 화면 차트 제목이 "긍정 / 부정 비율", 리뷰 목록 필터가 "긍정·부정 전체" | 문구 미갱신 | "긍정 / 중립 / 부정 비율", "감성 전체" | `test_three_way_sentiment_wording` |
+| I-22 | 10일차 점검 | 낮음 | 차트 툴팁·대체 표에 키워드 이름이 HTML 로 들어감 (셀러 본인 화면에만 영향) | 문자열을 그대로 HTML 에 삽입 | HTML 특수문자 이스케이프 (`_charts.html` 의 `esc`) | 코드 검토 |
+| I-23 | 10일차 점검 | 낮음 | 테스트를 돌릴 때마다 `SECRET_KEY` 경고가 출력됨, 문서의 테스트 수(298)가 실제와 다름 | 테스트용 키가 경고 목록의 값, favicon 테스트 추가 후 미갱신 | 테스트용 키 변경, `09_test_result.md`·`11_final_report.md` 갱신 | 테스트 출력에 경고 없음 |
 
 ## 남은 위험 (알고 있지만 이번 범위에서 두는 것)
 

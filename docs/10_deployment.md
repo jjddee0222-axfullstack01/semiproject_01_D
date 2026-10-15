@@ -66,7 +66,8 @@ nano backend/.env
 | `DB_PASSWORD` | 3장에서 정한 비밀번호 | 개발 PC 와 다른 값 사용 |
 | `SECRET_KEY` | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` 결과 | 예시 값이면 시작 로그에 경고가 나옴 |
 | `COOKIE_SECURE` | `1` | HTTPS 에서만 쿠키 전송 |
-| `MAIL_HOST` 등 `MAIL_*` | 실제 SMTP (예: Gmail 은 앱 비밀번호) | 비워 두면 인증 코드가 화면에 보이는 개발 모드가 됨 → 운영에서는 반드시 설정 |
+| `MAIL_HOST` 등 `MAIL_*` | 실제 SMTP (예: Gmail 은 앱 비밀번호) | 운영(`COOKIE_SECURE=1`)에서 비워 두면 인증 코드를 보낼 수 없어 회원가입·비밀번호 찾기가 막힘 (시작 로그에 경고) → 반드시 설정 |
+| `LOGIN_IP_MAX_FAILS`, `EMAIL_SEND_LIMIT_PER_IP` | 비워 두면 20 | 발표장처럼 많은 사람이 같은 와이파이로 접속하면 100 정도로 늘림 |
 | `EMAIL_VERIFICATION` | `1` | 운영에서는 인증 끄지 않음 |
 | `INTERNAL_API_KEY` | 필요할 때만 긴 무작위 값 | 비워 두면 내부 API(`/api/v1/internal/*`) 전부 차단 |
 
@@ -163,6 +164,7 @@ mariadb-dump -u root -p pinpoint > pinpoint_$(date +%Y%m%d).sql     # 매일 실
 
 ## 9. 발표 시연 팁
 
-- 시연 중 메일 서버가 불안정하면 `.env` 에서 `MAIL_HOST` 를 비워 개발 모드로 실행하면 인증 코드가 화면에 바로 보입니다 (운영 서버에서는 사용하지 않음).
+- 시연 중 메일 서버가 불안정하면 **노트북 로컬 서버**(`COOKIE_SECURE=0`)에서 `MAIL_HOST` 를 비워 개발 모드로 실행하면 인증 코드가 화면에 바로 보입니다. 운영 서버(`COOKIE_SECURE=1`)에서는 보안상 화면에 코드를 보여 주지 않습니다.
+- 청중이 같은 와이파이로 동시에 접속하는 시연이면 `.env` 에 `LOGIN_IP_MAX_FAILS=100`, `EMAIL_SEND_LIMIT_PER_IP=100` 처럼 IP 기준 제한을 늘리고 서버를 다시 켭니다. 같은 와이파이는 바깥에서 모두 같은 IP 로 보이기 때문입니다.
 - 로그인을 연속으로 틀려 잠겼다면 서버를 재시작하면 풀립니다.
 - 데모 데이터는 DB 가 비어 있을 때만 자동으로 들어갑니다 (`demo@pinpoint.kr` / `Pinpoint1!`).

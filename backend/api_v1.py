@@ -569,11 +569,24 @@ def delete_risk_keyword(keyword_id: int, user: CurrentUser, db: DB):
 # ══════════════════════════════════════════════
 # 7. 내보내기·LLM
 # ══════════════════════════════════════════════
+CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def csv_safe(value):
+    """엑셀이 수식으로 실행하지 않도록 =, +, -, @ 로 시작하는 글자 칸 앞에 ' 를 붙임 (CSV 수식 주입 방지)
+
+    리뷰 본문·작성자명은 고객이 쓴 외부 데이터라 '=HYPERLINK(...)' 같은 값이 들어올 수 있음. 숫자는 그대로 둠
+    """
+    if isinstance(value, str) and value.startswith(CSV_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
 def _csv_response(header: list[str], rows: list[list], filename: str) -> Response:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(header)
-    writer.writerows(rows)
+    writer.writerows([csv_safe(v) for v in row] for row in rows)
     # utf-8-sig(BOM): 엑셀에서 열어도 한글이 깨지지 않음
     return Response(content=buf.getvalue().encode("utf-8-sig"), media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})

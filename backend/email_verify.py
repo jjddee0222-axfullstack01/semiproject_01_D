@@ -29,15 +29,15 @@ from email.message import EmailMessage
 from typing import Optional
 
 try:
-    from .rate_limit import RateCounter
+    from .rate_limit import RateCounter, env_int
 except ImportError:
-    from rate_limit import RateCounter
+    from rate_limit import RateCounter, env_int
 
 CODE_VALID_SECONDS = 10 * 60
 RESEND_COOLDOWN_SECONDS = 60
 CODE_MAX_TRIES = 5
-SEND_LIMIT_PER_EMAIL = 5            # 같은 이메일로 1시간에 5번까지 발송
-SEND_LIMIT_PER_IP = 20              # 같은 IP 에서 1시간에 20번까지 발송
+SEND_LIMIT_PER_EMAIL = env_int("EMAIL_SEND_LIMIT_PER_EMAIL", 5)    # 같은 이메일로 1시간에 5번까지 발송
+SEND_LIMIT_PER_IP = env_int("EMAIL_SEND_LIMIT_PER_IP", 20)          # 같은 IP 에서 1시간에 20번까지 (발표장 등 공용 와이파이면 늘림)
 PURPOSES = {"signup": "회원가입", "reset": "비밀번호 변경"}
 
 # (용도, 이메일) → {hash, sent, exp, tries}  — 서버 메모리
@@ -69,6 +69,28 @@ def dev_mode() -> bool:
     return not os.environ.get("MAIL_HOST")
 
 
+def production_mode() -> bool:
+    """HTTPS 운영 설정(COOKIE_SECURE=1)이면 운영 모드 → 인증 코드를 화면에 절대 보여 주지 않음"""
+    return os.environ.get("COOKIE_SECURE", "0") == "1"
+
+
+def show_code_on_screen() -> bool:
+    """개발 모드이면서 운영 모드가 아닐 때만 화면에 코드 표시 (로컬 개발·시연용)"""
+    return dev_mode() and not production_mode()
+
+
+class MailUnavailable(Exception):
+    """운영 모드인데 메일 서버가 설정되지 않아 코드를 보낼 수 없음"""
+
+
+def mail_config_warning() -> str:
+    """서버 시작 시 점검: 운영 모드 + 인증 사용 + 메일 서버 없음 → 경고"""
+    if production_mode() and verification_enabled() and dev_mode():
+        return ("[PIN POINT][경고] COOKIE_SECURE=1(운영)인데 MAIL_HOST 가 비어 있어 인증 메일을 보낼 수 없습니다. "
+                "회원가입·비밀번호 찾기가 막힙니다. backend/.env 의 MAIL_* 를 설정하세요.")
+    return ""
+
+
 def _digest(purpose: str, email: str, code: str) -> str:
     secret = os.environ.get("SECRET_KEY", "dev-secret-change-me").encode()
     return hmac.new(secret, f"{purpose}:{email}:{code}".encode(), hashlib.sha256).hexdigest()
@@ -97,6 +119,9 @@ def issue_code(purpose: str, email: str, *, deliver: bool = True,
     deliver=False 면 코드를 만들지만 메일은 보내지 않음 (가입되지 않은 이메일로 비밀번호 변경을 요청한 경우:
     같은 안내 문구를 보여 줘서 가입 여부를 알 수 없게 함)
     """
+    if production_mode() and dev_mode():
+        # 운영 모드에서 코드를 화면에 보여 주면 이름·이메일·사업자 번호(공개 정보)만으로 비밀번호를 바꿀 수 있음
+        raise MailUnavailable("메일 서버가 설정되지 않아 인증 코드를 보낼 수 없습니다. 관리자에게 문의해 주세요.")
     now = time.time()
     key = (purpose, email)
     with _codes_lock:

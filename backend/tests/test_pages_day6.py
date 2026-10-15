@@ -92,29 +92,62 @@ def test_risk_keywords_on_settings(page):
     assert "위험 키워드 관리" in r.text and r.text.count('class="keyword-chip"') == 18
 
 
-def test_add_delete_risk_keyword_and_reanalyze(page, session, ids):
+def _analysis(session, review_id):
+    session.expire_all()
+    return session.scalar(select(m.ReviewAnalysis).where(m.ReviewAnalysis.review_id == review_id))
+
+
+def _review_words(session, review_id):
+    return session.scalars(select(m.Keyword.word).join(m.ReviewKeyword)
+                           .where(m.ReviewKeyword.review_id == review_id)).all()
+
+
+def test_add_delete_risk_keyword_applies_immediately(page, session, ids):
     review_id = ids["positive_a"]          # '배송이 정말 빠르고 … 대만족이에요!' (평점 5, 위험 아님)
+    assert _analysis(session, review_id).severity == 0
+    risky_before = page.get("/api/v1/stats/summary").json()["risky_count"]
+
+    # 추가하면 그 단어가 들어간 기존 리뷰가 바로 다시 분석됨 (재분석 버튼을 누르지 않아도)
     r = page.post("/settings/risk-keywords", data={"word": "대만족", "weight": "3"})
-    assert "추가했습니다" in r.text and r.text.count('class="keyword-chip"') == 19
+    assert "추가했습니다" in r.text and "리뷰 1건에 바로 반영" in r.text
+    assert r.text.count('class="keyword-chip"') == 19
+    analysis = _analysis(session, review_id)
+    assert analysis.severity == 3 and analysis.sentiment == m.Polarity.NEG
+    assert "대만족" in _review_words(session, review_id)
+
     assert "이미 등록된" in page.post("/settings/risk-keywords", data={"word": "대만족", "weight": "1"}).text
     assert "입력해 주세요" in page.post("/settings/risk-keywords", data={"word": " ", "weight": "1"}).text
     assert "1~10" in page.post("/settings/risk-keywords", data={"word": "x", "weight": "99"}).text
 
-    # 추가만 해서는 기존 리뷰 분석이 그대로 → 다시 분석하면 반영
-    assert session.get(m.ReviewAnalysis, session.scalar(
-        select(m.ReviewAnalysis.id).where(m.ReviewAnalysis.review_id == review_id))).severity == 0
-    r = page.post("/settings/reanalyze")
-    assert "리뷰 11건을" in r.text
-    session.expire_all()
-    analysis = session.scalar(select(m.ReviewAnalysis).where(m.ReviewAnalysis.review_id == review_id))
-    assert analysis.severity == 3
-    words = session.scalars(select(m.Keyword.word).join(m.ReviewKeyword)
-                            .where(m.ReviewKeyword.review_id == review_id)).all()
-    assert "대만족" in words
-
+    # 삭제하면 바로 원래 분석으로 돌아감
     kw_id = session.scalar(select(m.RiskKeyword.id).where(m.RiskKeyword.word == "대만족"))
     r = page.post(f"/settings/risk-keywords/{kw_id}/delete")
-    assert "삭제했습니다" in r.text and r.text.count('class="keyword-chip"') == 18
+    assert "삭제했습니다" in r.text and "리뷰 1건에 바로 반영" in r.text
+    assert r.text.count('class="keyword-chip"') == 18
+    analysis = _analysis(session, review_id)
+    assert analysis.severity == 0 and analysis.sentiment == m.Polarity.POS
+    assert "대만족" not in _review_words(session, review_id)
+    assert page.get("/api/v1/stats/summary").json()["risky_count"] == risky_before
+
+
+def test_new_risk_keyword_shows_on_dashboard_and_stats(page, ids):
+    def risky_count():
+        return page.get("/api/v1/stats/summary").json()["risky_count"]
+
+    before = risky_count()
+    page.post("/settings/risk-keywords", data={"word": "대만족", "weight": "2"})
+    assert risky_count() == before + 1
+    top = {k["word"] for k in page.get("/api/v1/stats/keywords/top", params={"limit": 50}).json()}
+    assert "대만족" in top
+
+
+def test_risk_keyword_without_matching_reviews(page):
+    r = page.post("/settings/risk-keywords", data={"word": "유통기한", "weight": "2"})
+    assert "앞으로 들어오는 리뷰부터" in r.text
+
+
+def test_reanalyze_all(page):
+    assert "리뷰 11건을" in page.post("/settings/reanalyze").text
 
 
 def test_cannot_delete_other_sellers_keyword(page, other_api, session):

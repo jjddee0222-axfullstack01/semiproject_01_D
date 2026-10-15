@@ -367,7 +367,7 @@
             <div class="card-title">위험 키워드 관리</div>
             <div class="card-guide">
                 리뷰에 아래 단어가 들어 있으면 '위험 리뷰'로 분류됩니다. 위험도 3 이상인 단어는 하나만 있어도 가장 높은 위험도로 분류됩니다.<br>
-                키워드를 바꾼 뒤에는 '기존 리뷰 다시 분석'을 눌러야 이미 들어온 리뷰에도 반영됩니다.
+                키워드를 추가·삭제하면 그 단어가 들어간 기존 리뷰에도 바로 반영됩니다. (평점 1~2점 리뷰는 키워드와 관계없이 위험 리뷰로 분류)
             </div>
 
             <div class="keyword-list">
@@ -392,11 +392,11 @@
             </form>
 
             <form class="reanalyze" method="post" action="{{ url_for('reanalyze') }}">
-                <span>현재 키워드로 내 상품의 모든 리뷰를 다시 분석합니다.</span>
-                <button type="submit" class="btn-secondary">기존 리뷰 다시 분석</button>
+                <span>분석 결과가 이상해 보이면 현재 키워드로 내 상품의 모든 리뷰를 다시 분석합니다.</span>
+                <button type="submit" class="btn-secondary">전체 리뷰 다시 분석</button>
             </form>
         </div>
     </main>
 
 </body>
-</html>
+</html>

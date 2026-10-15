@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session, selectinload
 try:
     from .analysis import MODEL_VERSION, RISK_SEVERITY
     from .auth import clear_cookie, delete_account, end_session, login_required, start_session
-    from .database import add_default_risk_keywords, analyze_and_save, seller_risk_keywords
+    from .database import add_default_risk_keywords, analyze_and_save, reanalyze_seller_reviews, seller_risk_keywords
     from .db import get_session
     from .models import (BlindAction, IngestLog, IssueType, Keyword, Polarity, Product,
                          ReplySuggestion, Review, ReviewAnalysis, ReviewBlindLog, ReviewKeyword,
@@ -37,7 +37,7 @@ try:
 except ImportError:
     from analysis import MODEL_VERSION, RISK_SEVERITY
     from auth import clear_cookie, delete_account, end_session, login_required, start_session
-    from database import add_default_risk_keywords, analyze_and_save, seller_risk_keywords
+    from database import add_default_risk_keywords, analyze_and_save, reanalyze_seller_reviews, seller_risk_keywords
     from db import get_session
     from models import (BlindAction, IngestLog, IssueType, Keyword, Polarity, Product,
                         ReplySuggestion, Review, ReviewAnalysis, ReviewBlindLog, ReviewKeyword,
@@ -487,7 +487,7 @@ def compare(params: Annotated[S.CompareQuery, Query()], user: CurrentUser, db: D
 
 # ══════════════════════════════════════════════
 # 6. 위험 키워드 설정
-#    ※ 변경 내용은 이후 분석부터 반영. 기존 리뷰에 반영하려면 /internal/analyze 로 재분석
+#    ※ 추가·수정·삭제하면 그 단어가 들어간 기존 리뷰를 바로 다시 분석 (위험 여부·감성·키워드 통계에 즉시 반영)
 # ══════════════════════════════════════════════
 def _owned_risk_keyword(db: Session, keyword_id: int, user: User) -> RiskKeyword:
     kw = db.get(RiskKeyword, keyword_id)
@@ -506,6 +506,17 @@ def _commit_or_conflict(db: Session) -> None:
         raise ApiError(409, "RISK_KEYWORD_DUPLICATED", "이미 등록된 위험 키워드입니다.") from None
 
 
+def _apply_risk_keyword_change(db: Session, user: User, words: list[str]) -> None:
+    """키워드 변경 저장 + 그 단어가 들어간 기존 리뷰 재분석 (중복 단어면 409)"""
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise ApiError(409, "RISK_KEYWORD_DUPLICATED", "이미 등록된 위험 키워드입니다.") from None
+    reanalyze_seller_reviews(db, user.id, list(dict.fromkeys(words)))
+    _commit_or_conflict(db)
+
+
 @router.get("/risk-keywords", response_model=list[S.RiskKeywordOut], tags=["위험 키워드"])
 def list_risk_keywords(user: CurrentUser, db: DB):
     rows = db.scalars(select(RiskKeyword).where(RiskKeyword.seller_id == user.id)
@@ -519,24 +530,27 @@ def create_risk_keyword(body: S.RiskKeywordCreate, user: CurrentUser, db: DB):
         raise ApiError(409, "RISK_KEYWORD_DUPLICATED", "이미 등록된 위험 키워드입니다.")
     kw = RiskKeyword(seller_id=user.id, word=body.word, weight=body.weight)
     db.add(kw)
-    _commit_or_conflict(db)
+    _apply_risk_keyword_change(db, user, [body.word])
     return S.RiskKeywordOut.model_validate(kw)
 
 
 @router.patch("/risk-keywords/{keyword_id}", response_model=S.RiskKeywordOut, tags=["위험 키워드"])
 def update_risk_keyword(keyword_id: int, body: S.RiskKeywordUpdate, user: CurrentUser, db: DB):
     kw = _owned_risk_keyword(db, keyword_id, user)
+    old_word = kw.word
     for field, value in body.model_dump(exclude_unset=True).items():
         if value is not None:
             setattr(kw, field, value)
-    _commit_or_conflict(db)
+    _apply_risk_keyword_change(db, user, [old_word, kw.word])
     return S.RiskKeywordOut.model_validate(kw)
 
 
 @router.delete("/risk-keywords/{keyword_id}", status_code=204, tags=["위험 키워드"])
 def delete_risk_keyword(keyword_id: int, user: CurrentUser, db: DB):
-    db.delete(_owned_risk_keyword(db, keyword_id, user))
-    db.commit()
+    kw = _owned_risk_keyword(db, keyword_id, user)
+    word = kw.word
+    db.delete(kw)
+    _apply_risk_keyword_change(db, user, [word])
     return _no_content()
 
 

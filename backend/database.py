@@ -4,9 +4,10 @@ PIN POINT REVIEW - DB 초기화 / 공통 데이터 처리 / 데모 데이터 (SQ
 테이블 정의는 models.py, 엔진·세션 설정은 db.py 에 있습니다.
 """
 from datetime import date, timedelta
+from typing import Optional
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session, selectinload
 
 try:
     from .analysis import (DEFAULT_RISK_KEYWORDS, MODEL_VERSION, analyze_review, clean_text,
@@ -59,6 +60,26 @@ def analyze_and_save(db: Session, review: Review, risk_keywords: list[tuple[str,
     db.add(analysis)
     _save_keywords(db, review, extract_keywords(review.content_raw, result.sentiment, risk_keywords))
     return analysis
+
+
+def reanalyze_seller_reviews(db: Session, seller_id: int, words: Optional[list[str]] = None) -> int:
+    """셀러의 리뷰를 현재 위험 키워드로 다시 분석하고 분석한 건수를 반환 (commit 은 호출한 쪽에서)
+
+    words 를 주면 그 단어가 들어간 리뷰만 다시 분석 (키워드 추가·삭제 직후 바로 반영할 때)
+    ※ 위험 키워드를 추가·삭제한 뒤에는 db.flush() 를 먼저 해야 바뀐 목록으로 분석됨 (autoflush=False)
+    """
+    stmt = (select(Review).join(Review.product).where(Product.seller_id == seller_id)
+            .options(selectinload(Review.analysis), selectinload(Review.keyword_links)))
+    if words is not None:
+        words = [w for w in words if w]
+        if not words:
+            return 0
+        stmt = stmt.where(or_(*(Review.content_raw.contains(w, autoescape=True) for w in words)))
+    keywords = seller_risk_keywords(db, seller_id)
+    reviews = db.scalars(stmt).all()
+    for review in reviews:
+        analyze_and_save(db, review, keywords)
+    return len(reviews)
 
 
 def _save_keywords(db: Session, review: Review, found: list) -> None:

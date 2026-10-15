@@ -39,3 +39,19 @@ def test_new_keyword_used_for_new_reviews(api, ids):
     api.post(URL, json={"word": "냄새", "weight": 3})
     r = api.post("/api/reviews", json={"product_id": ids["product_a"], "content": "냄새가 심해요", "rating": 4})
     assert r.json()["is_risky"] is True
+
+
+def test_keyword_change_applies_to_existing_reviews(api):
+    """추가·수정·삭제하면 그 단어가 들어간 기존 리뷰가 바로 다시 분석됨"""
+    def risky():
+        return api.get(f"{API}/stats/summary").json()["risky_count"]
+
+    before = risky()
+    kid = api.post(URL, json={"word": "대만족", "weight": 2}).json()["id"]      # 상품 A 의 평점 5 리뷰에 있는 단어
+    assert risky() == before + 1
+    assert api.patch(f"{URL}/{kid}", json={"word": "없는단어"}).status_code == 200   # 단어를 바꾸면 이전 단어 리뷰도 원래대로
+    assert risky() == before
+    assert api.patch(f"{URL}/{kid}", json={"word": "대만족"}).status_code == 200
+    assert risky() == before + 1
+    assert api.delete(f"{URL}/{kid}").status_code == 204
+    assert risky() == before

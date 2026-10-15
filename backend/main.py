@@ -37,7 +37,7 @@ try:
                        get_current_user, login_required, start_session)
     from .email_verify import PURPOSES, check_code, dev_mode, issue_code, verification_enabled
     from .database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
-                           seller_risk_keywords, this_month)
+                           reanalyze_seller_reviews, seller_risk_keywords, this_month)
     from .db import describe_db, get_session
     from .models import (BlindAction, Feedback, IngestLog, IssueType, Keyword, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
                          ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
@@ -53,7 +53,7 @@ except ImportError:
                       get_current_user, login_required, start_session)
     from email_verify import PURPOSES, check_code, dev_mode, issue_code, verification_enabled
     from database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
-                          seller_risk_keywords, this_month)
+                          reanalyze_seller_reviews, seller_risk_keywords, this_month)
     from db import describe_db, get_session
     from models import (BlindAction, Feedback, IngestLog, IssueType, Keyword, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
                         ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
@@ -1074,6 +1074,13 @@ def settings(request: Request,
 RISK_WORD_MAX = 100
 
 
+def applied_message(word: str, count: int) -> str:
+    """키워드 변경 후 자동 재분석 결과 안내"""
+    if count:
+        return f"'{word}'이(가) 들어간 리뷰 {count}건에 바로 반영했습니다."
+    return f"아직 '{word}'이(가) 들어간 리뷰는 없습니다. 앞으로 들어오는 리뷰부터 적용됩니다."
+
+
 @app.post("/settings/risk-keywords", name="risk_keyword_add")
 def risk_keyword_add(request: Request,
                      word: str = Form(""),
@@ -1092,8 +1099,10 @@ def risk_keyword_add(request: Request,
         flash(request, f"'{word}'은(는) 이미 등록된 위험 키워드입니다.", "error")
     else:
         db.add(RiskKeyword(seller_id=user.id, word=word, weight=level))
+        db.flush()                                   # 추가한 키워드까지 포함해 바로 재분석
+        count = reanalyze_seller_reviews(db, user.id, [word])
         db.commit()
-        flash(request, f"위험 키워드 '{word}'을(를) 추가했습니다. 기존 리뷰에 반영하려면 '기존 리뷰 다시 분석'을 눌러 주세요.")
+        flash(request, f"위험 키워드 '{word}'을(를) 추가했습니다. {applied_message(word, count)}")
     return RedirectResponse(f"{request.url_for('settings')}#risk-keywords", status_code=303)
 
 
@@ -1106,9 +1115,12 @@ def risk_keyword_delete(request: Request,
     if kw is None or kw.seller_id != user.id:
         flash(request, "위험 키워드를 찾을 수 없습니다.", "error")
     else:
+        word = kw.word
         db.delete(kw)
+        db.flush()                                   # 삭제한 키워드를 빼고 바로 재분석
+        count = reanalyze_seller_reviews(db, user.id, [word])
         db.commit()
-        flash(request, f"위험 키워드 '{kw.word}'을(를) 삭제했습니다.")
+        flash(request, f"위험 키워드 '{word}'을(를) 삭제했습니다. {applied_message(word, count)}")
     return RedirectResponse(f"{request.url_for('settings')}#risk-keywords", status_code=303)
 
 
@@ -1117,13 +1129,9 @@ def reanalyze(request: Request,
               user: User = Depends(login_required),
               db: Session = Depends(get_session)):
     """현재 위험 키워드로 내 상품의 모든 리뷰(블라인드 포함)를 다시 분석"""
-    keywords = seller_risk_keywords(db, user.id)
-    reviews = db.scalars(select(Review).join(Review.product).where(Product.seller_id == user.id)
-                         .options(selectinload(Review.analysis), selectinload(Review.keyword_links))).all()
-    for review in reviews:
-        analyze_and_save(db, review, keywords)
+    count = reanalyze_seller_reviews(db, user.id)
     db.commit()
-    flash(request, f"리뷰 {len(reviews)}건을 현재 위험 키워드로 다시 분석했습니다.")
+    flash(request, f"리뷰 {count}건을 현재 위험 키워드로 다시 분석했습니다.")
     return RedirectResponse(f"{request.url_for('settings')}#risk-keywords", status_code=303)
 
 

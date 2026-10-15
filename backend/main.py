@@ -37,7 +37,7 @@ try:
     from .database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                            seller_risk_keywords, this_month)
     from .db import describe_db, get_session
-    from .models import (BlindAction, Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
+    from .models import (BlindAction, Feedback, IssueType, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
                          ReviewAnalysis, ReviewBlindLog, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                          UserStatus, visible_reviews)
     from .pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
@@ -52,7 +52,7 @@ except ImportError:
     from database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                           seller_risk_keywords, this_month)
     from db import describe_db, get_session
-    from models import (BlindAction, Feedback, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
+    from models import (BlindAction, Feedback, IssueType, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
                         ReviewAnalysis, ReviewBlindLog, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                         UserStatus, visible_reviews)
     from pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
@@ -370,27 +370,95 @@ async def products_upload(request: Request,
     return redirect(request, "products")
 
 
+# ── 상품별 리뷰 필터 (상품별 대시보드의 '상세 리뷰' 목록에만 적용, 상단 통계·요약은 전체 기준)
+REVIEW_PAGE_SIZE = 10
+REVIEW_QUERY_MAX = 100
+SENTIMENT_LABELS = {"POS": "긍정", "NEG": "부정", "NEU": "중립"}
+ISSUE_LABELS = {"PRODUCT": "상품", "DELIVERY": "배송", "PACKAGING": "포장", "ETC": "기타"}
+SEVERITY_LABELS = {0: "정상", 1: "주의", 2: "위험", 3: "심각"}
+REVIEW_SORTS = {
+    "latest": ("최신순", lambda: (Review.reviewed_at.desc(), Review.id.desc())),
+    "oldest": ("오래된순", lambda: (Review.reviewed_at.asc(), Review.id.asc())),
+    "severity": ("위험도 높은순", lambda: (func.coalesce(ReviewAnalysis.severity, -1).desc(),
+                                        Review.reviewed_at.desc(), Review.id.desc())),
+    "rating_low": ("평점 낮은순", lambda: (Review.rating.asc(), Review.reviewed_at.desc(), Review.id.desc())),
+    "rating_high": ("평점 높은순", lambda: (Review.rating.desc(), Review.reviewed_at.desc(), Review.id.desc())),
+}
+
+
+def review_filters(sentiment: str, issue: str, risk: str, rating: str, q: str, sort: str) -> dict:
+    """쿼리 문자열 → 허용된 값만 남긴 필터 (잘못된 값은 조용히 무시 = 전체)"""
+    filters = {
+        "sentiment": sentiment if sentiment in SENTIMENT_LABELS else "",
+        "issue": issue if issue in ISSUE_LABELS else "",
+        "risk": "1" if risk == "1" else "",
+        "rating": rating if rating in {"1", "2", "3", "4", "5"} else "",
+        "q": q.strip()[:REVIEW_QUERY_MAX],
+        "sort": sort if sort in REVIEW_SORTS else "latest",
+    }
+    return filters
+
+
+def filtered_reviews_stmt(product_id: int, filters: dict):
+    """공개(VISIBLE) 리뷰 + 분석 결과 LEFT JOIN 에 필터 조건을 붙인 SELECT"""
+    stmt = (visible_reviews()
+            .outerjoin(ReviewAnalysis, ReviewAnalysis.review_id == Review.id)
+            .where(Review.product_id == product_id))
+    if filters["sentiment"]:
+        stmt = stmt.where(ReviewAnalysis.sentiment == Polarity(filters["sentiment"]))
+    if filters["issue"]:
+        stmt = stmt.where(ReviewAnalysis.issue_type == IssueType(filters["issue"]))
+    if filters["risk"]:
+        stmt = stmt.where(ReviewAnalysis.severity >= RISK_SEVERITY)
+    if filters["rating"]:
+        stmt = stmt.where(Review.rating == int(filters["rating"]))
+    if filters["q"]:
+        stmt = stmt.where(Review.content_raw.contains(filters["q"], autoescape=True))
+    return stmt
+
+
 @app.get("/products/{product_id}", name="product_dashboard", response_class=HTMLResponse)
 def product_dashboard(request: Request,
                       product_id: int,
+                      sentiment: str = "",
+                      issue: str = "",
+                      risk: str = "",
+                      rating: str = "",
+                      q: str = "",
+                      sort: str = "latest",
+                      page: str = "1",
                       user: User = Depends(login_required),
                       db: Session = Depends(get_session)):
-    """상품별 대시보드 — 상품 정보 / 위험 리뷰 / 상세 리뷰 / 구매자 수 / 평균 평점 / 긍정·부정 요약"""
+    """상품별 대시보드 — 상품 정보 / 위험 리뷰 / 상세 리뷰(필터·정렬·페이지) / 구매자 수 / 평균 평점 / 긍정·부정 요약"""
     product = db.get(Product, product_id)
     # 화면에서는 남의 상품도 '없는 페이지'로 처리 (상품 존재 여부를 노출하지 않음). API는 403.
     if product is None or product.seller_id != user.id:
         raise HTTPException(status_code=404)
 
-    reviews = db.scalars(
+    # 상단 통계·요약: 필터와 무관하게 이 상품의 공개 리뷰 전체 기준
+    all_reviews = db.scalars(
         visible_reviews()
         .where(Review.product_id == product_id)
         .options(selectinload(Review.analysis))
-        .order_by(Review.reviewed_at.desc(), Review.id.desc())
     ).all()
-    avg_rating = sum(r.rating for r in reviews) / len(reviews) if reviews else 0.0
-    risky_count = sum(1 for r in reviews if r.analysis and r.analysis.severity >= RISK_SEVERITY)
+    avg_rating = sum(r.rating for r in all_reviews) / len(all_reviews) if all_reviews else 0.0
+    risky_count = sum(1 for r in all_reviews if r.analysis and r.analysis.severity >= RISK_SEVERITY)
     stat = db.get(ProductMonthlyStat, (product_id, this_month()))
-    positive_summary, negative_summary = summarize_reviews(reviews)
+    positive_summary, negative_summary = summarize_reviews(all_reviews)
+
+    # 상세 리뷰 목록: 필터 → 개수 → 정렬 → 페이지
+    filters = review_filters(sentiment, issue, risk, rating, q, sort)
+    stmt = filtered_reviews_stmt(product_id, filters)
+    filtered_total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    pages = max(1, -(-filtered_total // REVIEW_PAGE_SIZE))
+    page = min(max(int(page) if page.isdigit() else 1, 1), pages)     # 잘못된 page 값은 1페이지
+    reviews = db.scalars(
+        stmt.options(selectinload(Review.analysis))
+        .order_by(*REVIEW_SORTS[filters["sort"]][1]())
+        .limit(REVIEW_PAGE_SIZE).offset((page - 1) * REVIEW_PAGE_SIZE)
+    ).all()
+    # 페이지 링크·초기화에 쓰는 '기본값이 아닌 필터'만 남긴 쿼리
+    active_filters = {k: v for k, v in filters.items() if v and not (k == "sort" and v == "latest")}
 
     blinded_reviews = db.scalars(
         select(Review).where(Review.product_id == product_id, Review.status == ReviewStatus.BLINDED)
@@ -400,7 +468,12 @@ def product_dashboard(request: Request,
     return render(request, "productdashboard.html", active_menu="products",
                   product=product, reviews=reviews, risky_count=risky_count, blinded_reviews=blinded_reviews,
                   avg_rating=avg_rating, monthly_buyers=stat.buyers if stat else 0,
-                  positive_summary=positive_summary, negative_summary=negative_summary)
+                  positive_summary=positive_summary, negative_summary=negative_summary,
+                  filters=filters, active_filters=active_filters, total_reviews=len(all_reviews),
+                  filtered_total=filtered_total, page=page, pages=pages,
+                  sentiment_labels=SENTIMENT_LABELS, issue_labels=ISSUE_LABELS,
+                  severity_labels=SEVERITY_LABELS,
+                  sort_labels={k: label for k, (label, _) in REVIEW_SORTS.items()})
 
 
 # ──────────────────────────────────────────────

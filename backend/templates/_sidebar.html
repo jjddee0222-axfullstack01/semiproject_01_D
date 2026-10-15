@@ -1,5 +1,11 @@
     <!-- 사이드바 (공통) : active_menu 값으로 현재 메뉴 표시 -->
-    <aside class="sidebar">
+    <!-- 휴대폰·태블릿(폭 768px 이하): 상단 바 + ☰ 버튼으로 사이드바를 열고 닫음 -->
+    <header class="mobile-bar">
+        <button type="button" class="nav-toggle" aria-label="메뉴 열기" aria-controls="app-sidebar" aria-expanded="false">☰</button>
+        <span class="mobile-logo">PIN POINT REVIEW</span>
+    </header>
+    <div class="nav-backdrop" data-nav-close></div>
+    <aside class="sidebar" id="app-sidebar">
         <div class="sidebar-top">
             <div class="logo">PIN POINT REVIEW</div>
 
@@ -14,6 +20,7 @@
             <ul class="menu-list">
                 <li class="menu-item {{ 'active' if active_menu == 'dashboard' }}"><a href="{{ url_for('dashboard') }}">대시보드</a></li>
                 <li class="menu-item {{ 'active' if active_menu == 'products' }}"><a href="{{ url_for('products') }}">상품 조회</a></li>
+                <li class="menu-item {{ 'active' if active_menu == 'reviews' }}"><a href="{{ url_for('review_list') }}">리뷰 목록</a></li>
                 <li class="menu-item {{ 'active' if active_menu == 'analysis' }}"><a href="{{ url_for('analysis') }}">분석</a></li>
                 <li class="menu-item {{ 'active' if active_menu == 'cschatbot' }}"><a href="{{ url_for('cschatbot') }}">CS챗봇</a></li>
             </ul>
@@ -27,3 +34,61 @@
             </ul>
         </div>
     </aside>
+
+    <style>
+        .mobile-bar, .nav-backdrop { display: none; }
+
+        @media (max-width: 768px) {
+            body { display: block !important; height: auto !important; min-height: 100vh; }
+
+            .mobile-bar {
+                display: flex; align-items: center; gap: 10px;
+                position: sticky; top: 0; z-index: 40;
+                height: 52px; padding: 0 12px;
+                background-color: #ffffff; border-bottom: 1px solid #E9ECEF;
+            }
+            .nav-toggle {
+                width: 36px; height: 36px; border: 1px solid #DEE2E6; border-radius: 8px;
+                background: #ffffff; font-size: 18px; cursor: pointer;
+            }
+            .mobile-logo { font-size: 14px; font-weight: 800; color: #111111; letter-spacing: -0.5px; }
+
+            .sidebar {
+                position: fixed !important; top: 0; left: 0; bottom: 0; z-index: 60;
+                width: 260px !important; overflow-y: auto;
+                transform: translateX(-100%); transition: transform 0.2s ease;
+                box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
+            }
+            body.nav-open .sidebar { transform: none; }
+            body.nav-open .nav-backdrop { display: block; position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.3); }
+
+            .main-content { padding: 20px 16px !important; overflow: visible !important; }
+            .card { padding: 16px !important; }
+
+            /* 여러 칸 그리드는 한 줄로 쌓기 */
+            .dashboard-grid, .dashboard-layout, .analytics-grid, .chart-grid, .compare-grid,
+            .cs-row, .table-header, .review-row { grid-template-columns: 1fr !important; }
+            .stats-grid, .summary-grid { grid-template-columns: 1fr 1fr !important; }
+            .table-header > div:last-child { display: none; }
+
+            .page-title-area { flex-direction: column; align-items: flex-start !important; gap: 4px; }
+            .stats-toolbar .card-title { width: 100%; }
+            .upload-form, .search-form, .keyword-add, .pick-bar { flex-wrap: wrap; }
+            .search-form input, .upload-drop, .keyword-add input { min-width: 0; max-width: none !important; flex-basis: 100%; }
+            .product-card { flex-direction: column; align-items: flex-start !important; }
+            .review-side { align-items: flex-start !important; flex-direction: row !important; }
+        }
+    </style>
+    <script>
+        (() => {
+            const toggle = document.querySelector(".nav-toggle");
+            const setOpen = (open) => {
+                document.body.classList.toggle("nav-open", open);
+                toggle.setAttribute("aria-expanded", String(open));
+                toggle.setAttribute("aria-label", open ? "메뉴 닫기" : "메뉴 열기");
+            };
+            toggle.addEventListener("click", () => setOpen(!document.body.classList.contains("nav-open")));
+            document.querySelector("[data-nav-close]").addEventListener("click", () => setOpen(false));
+            document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
+        })();
+    </script>

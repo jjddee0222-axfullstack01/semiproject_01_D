@@ -15,6 +15,8 @@ AI 에이전트(Claude Code 등)에게 작업을 맡길 때 이 파일을 먼저
 - 화면 라우트 `backend/main.py` · REST API `backend/api_v1.py` (`/api/v1`)
 - 테이블 `backend/models.py` · 요청/응답 형식 `backend/schemas.py`
 - 분석 규칙 `backend/analysis.py` · 추천 답글 `backend/reply_drafts.py`
+- 이메일 인증 코드 `backend/email_verify.py` · CSV 적재 `backend/pipeline.py`
+- 새 화면 템플릿은 `{% include '_layout_styles.html' %}` + `{% include '_sidebar.html' %}` 로 공통 스타일·모바일 메뉴 사용
 
 ## 반드시 지킬 것
 - 셀러는 **자기 상품의 데이터만** 접근 (API 403 / 화면 404). 새 기능에도 소유권 검사 필수

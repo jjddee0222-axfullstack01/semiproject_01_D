@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIN POINT REVIEW - 상품 비교</title>
+    {% include '_layout_styles.html' %}
+    <style>
+        .pick-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pick-bar select {
+            flex: 1;
+            min-width: 180px;
+            height: 36px;
+            padding: 0 10px;
+            border: 1px solid #DEE2E6;
+            border-radius: 8px;
+            font-size: 13px;
+            background-color: #ffffff;
+        }
+
+        .vs {
+            font-size: 12px;
+            font-weight: 700;
+            color: #868E96;
+        }
+
+        .compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .product-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: #111111;
+            margin-bottom: 2px;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 16px 0;
+        }
+
+        .metric {
+            padding: 12px;
+            border-radius: 8px;
+            background-color: #F8F9FA;
+            text-align: center;
+        }
+
+        .metric .label {
+            font-size: 11px;
+            color: #868E96;
+            margin-bottom: 4px;
+        }
+
+        .metric .value {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .metric .value.better {
+            color: #1C7ED6;
+        }
+
+        .section-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #555555;
+            margin: 16px 0 8px;
+        }
+
+        /* 긍정·부정 비율 막대 (긍정=파랑, 부정=빨강: 차트와 같은 색) */
+        .ratio-bar {
+            display: flex;
+            height: 14px;
+            border-radius: 7px;
+            overflow: hidden;
+            background-color: #E9ECEF;
+            gap: 2px;
+        }
+
+        .ratio-bar .pos { background-color: #1C7ED6; }
+        .ratio-bar .neg { background-color: #E03131; }
+
+        .ratio-legend {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 12px;
+            color: #555555;
+        }
+
+        .issue-row {
+            display: grid;
+            grid-template-columns: 48px 1fr 32px;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .issue-track {
+            height: 8px;
+            border-radius: 4px;
+            background-color: #F1F3F5;
+            overflow: hidden;
+        }
+
+        .issue-fill {
+            height: 100%;
+            border-radius: 4px;
+            background-color: #495057;
+        }
+
+        .keyword-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .summary-list {
+            padding-left: 18px;
+            font-size: 13px;
+            color: #333333;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+
+    {% include '_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="page-title-area">
+            <h1 class="page-title">상품 비교</h1>
+            <span class="page-guide">두 상품의 리뷰 반응을 나란히 비교합니다. (블라인드 리뷰 제외)</span>
+        </div>
+        {% include '_flash.html' %}
+
+        {% if not left %}
+        <div class="card"><div class="review-empty">비교하려면 상품이 2개 이상 있어야 합니다. 상품 조회 화면에서 리뷰 CSV를 업로드해 보세요.</div></div>
+        {% else %}
+        <form class="card pick-bar" method="get" action="{{ url_for('compare_products') }}">
+            <select name="a" aria-label="첫 번째 상품">
+                {% for p in products %}<option value="{{ p.id }}" {% if p.id == left.product.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+            </select>
+            <span class="vs">VS</span>
+            <select name="b" aria-label="두 번째 상품">
+                {% for p in products %}<option value="{{ p.id }}" {% if p.id == right.product.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="btn-filter">비교하기</button>
+        </form>
+
+        <div class="card">
+            <div class="card-title">한눈에 보는 차이</div>
+            <ul class="summary-list">{% for line in summary %}<li>{{ line }}</li>{% endfor %}</ul>
+        </div>
+
+        <div class="compare-grid">
+            {% for prof, other in [(left, right), (right, left)] %}
+            <div class="card">
+                <div class="product-name">{{ prof.product.name }}</div>
+                <div class="muted">{{ prof.product.category or '카테고리 없음' }} · <a class="text-link" href="{{ url_for('product_dashboard', product_id=prof.product.id) }}">상품별 대시보드 →</a></div>
+
+                <div class="metric-grid">
+                    <div class="metric">
+                        <div class="label">평균 평점</div>
+                        <div class="value{{ ' better' if prof.avg_rating is not none and other.avg_rating is not none and prof.avg_rating > other.avg_rating + 0.04 }}">
+                            {{ "%.1f"|format(prof.avg_rating) if prof.avg_rating is not none else '-' }}</div>
+                    </div>
+                    <div class="metric"><div class="label">리뷰 수</div><div class="value">{{ prof.review_count }}</div></div>
+                    <div class="metric"><div class="label">위험 리뷰</div><div class="value">{{ prof.risky }}</div></div>
+                </div>
+
+                <div class="section-label">긍정 / 부정 비율</div>
+                {% if prof.analyzed %}
+                <div class="ratio-bar" role="img" aria-label="긍정 {{ (prof.positive_ratio * 100)|round|int }}%, 부정 {{ (prof.negative_ratio * 100)|round|int }}%">
+                    {% if prof.positive %}<div class="pos" style="width: {{ prof.positive_ratio * 100 }}%"></div>{% endif %}
+                    {% if prof.negative %}<div class="neg" style="width: {{ prof.negative_ratio * 100 }}%"></div>{% endif %}
+                </div>
+                <div class="ratio-legend">
+                    <span>긍정 {{ prof.positive }}건 ({{ (prof.positive_ratio * 100)|round|int }}%)</span>
+                    <span>부정 {{ prof.negative }}건 ({{ (prof.negative_ratio * 100)|round|int }}%)</span>
+                </div>
+                {% else %}<div class="muted">분석된 리뷰가 없습니다.</div>{% endif %}
+
+                <div class="section-label">부정 리뷰 이슈 유형</div>
+                {% set max_issue = [prof.issues.values()|max, other.issues.values()|max, 1]|max %}
+                {% for label, n in prof.issues.items() %}
+                <div class="issue-row">
+                    <span>{{ label }}</span>
+                    <div class="issue-track"><div class="issue-fill" style="width: {{ n / max_issue * 100 }}%"></div></div>
+                    <span class="num">{{ n }}건</span>
+                </div>
+                {% endfor %}
+
+                <div class="section-label">자주 나온 키워드</div>
+                <div class="keyword-list">
+                    {% for word, polarity, n in prof.keywords %}
+                    <span class="tag tag-{{ polarity.value|lower }}">{{ word }} {{ n }}</span>
+                    {% else %}<span class="muted">키워드가 없습니다.</span>{% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </main>
+
+</body>
+</html>

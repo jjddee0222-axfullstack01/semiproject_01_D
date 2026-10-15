@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIN POINT REVIEW - 업로드 이력</title>
+    
+<style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+        }
+
+        body {
+            background-color: #F5F5F5;
+            display: flex;
+            height: 100vh;
+            color: #333333;
+        }
+
+        /* 사이드바 스타일 (피그마 원본 목록 반영) */
+        .sidebar {
+            width: 240px;
+            background-color: #ffffff;
+            border-right: 1px solid #E0E0E0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px 16px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-top {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .logo {
+            font-size: 15px;
+            font-weight: 800;
+            color: #111111;
+            padding-left: 4px;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background-color: #F8F9FA;
+            border-radius: 8px;
+        }
+
+        .profile-icon {
+            width: 28px;
+            height: 28px;
+            background-color: #E9ECEF;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .profile-info .shop-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .profile-info .user-email {
+            font-size: 10px;
+            color: #666666;
+        }
+
+        .menu-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .menu-item a {
+            display: block;
+            padding: 10px 12px;
+            font-size: 13px;
+            color: #555555;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .menu-item.active a, .menu-item a:hover {
+            background-color: #F1F3F5;
+            color: #111111;
+            font-weight: 600;
+        }
+
+        .sidebar-bottom {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            border-top: 1px solid #E9ECEF;
+            padding-top: 16px;
+        }
+
+        /* 메인 콘텐츠 영역 스타일 */
+        .main-content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+        }
+
+        .page-title-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 24px;
+        }
+
+        .page-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .page-guide {
+            font-size: 13px;
+            color: #666666;
+        }
+
+        .card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111111;
+            margin-bottom: 14px;
+        }
+
+        .muted {
+            color: #868E96;
+            font-size: 12px;
+        }
+
+        .text-link {
+            color: #333333;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #F1F3F5;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .data-table th {
+            font-size: 12px;
+            color: #868E96;
+            font-weight: 600;
+        }
+
+        .data-table .num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 리뷰 필터 */
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .filter-bar select,
+        .filter-bar input[type="search"] {
+            height: 32px;
+            padding: 0 8px;
+            border: 1px solid #DEE2E6;
+            border-radius: 6px;
+            font-size: 12px;
+            background-color: #ffffff;
+            color: #333333;
+        }
+
+        .filter-bar input[type="search"] {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .filter-check {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: #555555;
+        }
+
+        .btn-filter {
+            height: 32px;
+            padding: 0 14px;
+            border: none;
+            border-radius: 6px;
+            background-color: #111111;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .filter-reset {
+            font-size: 12px;
+            color: #868E96;
+        }
+
+        .filter-summary {
+            margin-bottom: 12px;
+            font-size: 12px;
+            color: #666666;
+        }
+
+        .review-empty {
+            padding: 20px 14px;
+            background-color: #F8F9FA;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #868E96;
+            text-align: center;
+        }
+
+        .tag {
+            padding: 1px 7px;
+            border-radius: 10px;
+            background-color: #F1F3F5;
+            color: #495057;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .tag-pos { background-color: #E7F5FF; color: #1864AB; }
+        .tag-neg { background-color: #FFF5F5; color: #C92A2A; }
+        .tag-neu { background-color: #F1F3F5; color: #495057; }
+
+        .btn-detail {
+            padding: 2px 8px;
+            border: 1px solid #CED4DA;
+            border-radius: 6px;
+            background-color: #ffffff;
+            color: #333333;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .btn-detail:hover {
+            border-color: #111111;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 16px;
+            font-size: 12px;
+        }
+
+        .pagination a,
+        .pagination span {
+            min-width: 28px;
+            padding: 5px 8px;
+            border-radius: 6px;
+            text-align: center;
+            text-decoration: none;
+            color: #555555;
+        }
+
+        .pagination a:hover {
+            background-color: #F1F3F5;
+        }
+
+        .pagination .current {
+            background-color: #111111;
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .tag-risk { background-color: #FFF5F5; color: #E03131; }
+        .tag-done { background-color: #EBFBEE; color: #2B8A3E; }
+        .tag-blind { background-color: #F1F3F5; color: #868E96; }
+</style>
+    <style>
+        .back-btn {
+            display: inline-block;
+            margin-bottom: 12px;
+            font-size: 13px;
+            color: #666666;
+            text-decoration: none;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .summary-box {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            text-align: center;
+        }
+
+        .summary-box .label {
+            font-size: 12px;
+            color: #868E96;
+            margin-bottom: 6px;
+        }
+
+        .summary-box .value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .ok { color: #2B8A3E; }
+        .warn { color: #E8590C; }
+        .bad { color: #E03131; }
+        .table-wrap { overflow-x: auto; }
+    </style>
+</head>
+<body>
+
+        <!-- 사이드바 (공통) : active_menu 값으로 현재 메뉴 표시 -->
+    <!-- 휴대폰·태블릿(폭 768px 이하): 상단 바 + ☰ 버튼으로 사이드바를 열고 닫음 -->
+    <header class="mobile-bar">
+        <button type="button" class="nav-toggle" aria-label="메뉴 열기" aria-controls="app-sidebar" aria-expanded="false">☰</button>
+        <span class="mobile-logo">PIN POINT REVIEW</span>
+    </header>
+    <div class="nav-backdrop" data-nav-close></div>
+    <aside class="sidebar" id="app-sidebar">
+        <div class="sidebar-top">
+            <div class="logo">PIN POINT REVIEW</div>
+
+            <div class="user-profile">
+                <div class="profile-icon">👤</div>
+                <div class="profile-info">
+                    <div class="shop-name">쇼핑몰 이름</div>
+                    <div class="user-email">닉네임(이름) (seller@example.com)</div>
+                </div>
+            </div>
+
+            <ul class="menu-list">
+                <li class="menu-item "><a href="dashboard.html">대시보드</a></li>
+                <li class="menu-item active"><a href="productresearch.html">상품 조회</a></li>
+                <li class="menu-item "><a href="reviews.html">리뷰 목록</a></li>
+                <li class="menu-item "><a href="analysis.html">분석</a></li>
+                <li class="menu-item "><a href="cschatbot.html">CS챗봇</a></li>
+            </ul>
+        </div>
+
+        <div class="sidebar-bottom">
+            <ul class="menu-list">
+                <li class="menu-item "><a href="informationedit.html">설정</a></li>
+                <li class="menu-item "><a href="sendfeedback.html">의견 보내기</a></li>
+                <li class="menu-item"><a href="index.html">로그아웃</a></li>
+            </ul>
+        </div>
+    </aside>
+
+    <style>
+        .mobile-bar, .nav-backdrop { display: none; }
+
+        @media (max-width: 768px) {
+            body { display: block !important; height: auto !important; min-height: 100vh; }
+
+            .mobile-bar {
+                display: flex; align-items: center; gap: 10px;
+                position: sticky; top: 0; z-index: 40;
+                height: 52px; padding: 0 12px;
+                background-color: #ffffff; border-bottom: 1px solid #E9ECEF;
+            }
+            .nav-toggle {
+                width: 36px; height: 36px; border: 1px solid #DEE2E6; border-radius: 8px;
+                background: #ffffff; font-size: 18px; cursor: pointer;
+            }
+            .mobile-logo { font-size: 14px; font-weight: 800; color: #111111; letter-spacing: -0.5px; }
+
+            .sidebar {
+                position: fixed !important; top: 0; left: 0; bottom: 0; z-index: 60;
+                width: 260px !important; overflow-y: auto;
+                transform: translateX(-100%); transition: transform 0.2s ease;
+                box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
+            }
+            body.nav-open .sidebar { transform: none; }
+            body.nav-open .nav-backdrop { display: block; position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.3); }
+
+            .main-content { padding: 20px 16px !important; overflow: visible !important; }
+            .card { padding: 16px !important; }
+
+            /* 여러 칸 그리드는 한 줄로 쌓기 */
+            .dashboard-grid, .dashboard-layout, .analytics-grid, .chart-grid, .compare-grid,
+            .cs-row, .table-header, .review-row { grid-template-columns: 1fr !important; }
+            .stats-grid, .summary-grid { grid-template-columns: 1fr 1fr !important; }
+            .table-header > div:last-child { display: none; }
+
+            .page-title-area { flex-direction: column; align-items: flex-start !important; gap: 4px; }
+            .stats-toolbar .card-title { width: 100%; }
+            .upload-form, .search-form, .keyword-add, .pick-bar { flex-wrap: wrap; }
+            .search-form input, .upload-drop, .keyword-add input { min-width: 0; max-width: none !important; flex-basis: 100%; }
+            .product-card { flex-direction: column; align-items: flex-start !important; }
+            .review-side { align-items: flex-start !important; flex-direction: row !important; }
+        }
+    </style>
+    <script>
+        (() => {
+            const toggle = document.querySelector(".nav-toggle");
+            const setOpen = (open) => {
+                document.body.classList.toggle("nav-open", open);
+                toggle.setAttribute("aria-expanded", String(open));
+                toggle.setAttribute("aria-label", open ? "메뉴 닫기" : "메뉴 열기");
+            };
+            toggle.addEventListener("click", () => setOpen(!document.body.classList.contains("nav-open")));
+            document.querySelector("[data-nav-close]").addEventListener("click", () => setOpen(false));
+            document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
+        })();
+    </script>
+
+    <main class="main-content">
+        <a class="back-btn" href="productresearch.html">&larr; 상품 조회로 돌아가기</a>
+        <div class="page-title-area">
+            <h1 class="page-title">업로드 이력</h1>
+            <span class="page-guide">상품 조회 화면에서 올린 리뷰 CSV 기록입니다. (최근 100건)</span>
+        </div>
+        
+  
+
+
+        <div class="summary-grid">
+            <div class="summary-box"><div class="label">업로드 횟수</div><div class="value">1회</div></div>
+            <div class="summary-box"><div class="label">추가된 리뷰</div><div class="value ok">2건</div></div>
+            <div class="summary-box"><div class="label">중복으로 제외</div><div class="value warn">0건</div></div>
+            <div class="summary-box"><div class="label">오류로 건너뜀</div><div class="value bad">0건</div></div>
+        </div>
+
+        <div class="card">
+            
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>업로드 일시</th><th>파일 이름</th><th class="num">전체 행</th><th class="num">추가</th><th class="num">중복</th><th class="num">오류</th></tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td>2026.10.15 01:09</td>
+                            <td>reviews_2026-10.csv</td>
+                            <td class="num">2</td>
+                            <td class="num ok">2</td>
+                            <td class="num">0</td>
+                            <td class="num">0</td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+            </div>
+            
+        </div>
+    </main>
+
+</body>
+</html>

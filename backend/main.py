@@ -15,8 +15,9 @@ API 문서: http://127.0.0.1:8000/docs
 import csv
 import os
 import re
+import time
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -32,13 +33,14 @@ from starlette.middleware.sessions import SessionMiddleware
 try:
     from .analysis import RISK_SEVERITY, shop_report, summarize_reviews
     from .api_v1 import setup_api
-    from .auth import (LoginRequired, clear_cookie, delete_account, end_session,
+    from .auth import (LoginRequired, clear_cookie, delete_account, end_all_sessions, end_session,
                        get_current_user, login_required, start_session)
+    from .email_verify import PURPOSES, check_code, dev_mode, issue_code, verification_enabled
     from .database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                            seller_risk_keywords, this_month)
     from .db import describe_db, get_session
-    from .models import (BlindAction, Feedback, IssueType, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                         ReviewAnalysis, ReviewBlindLog, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
+    from .models import (BlindAction, Feedback, IngestLog, IssueType, Keyword, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
+                         ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                          UserStatus, visible_reviews)
     from .pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
     from .reply_drafts import generate_reply_draft
@@ -47,13 +49,14 @@ try:
 except ImportError:
     from analysis import RISK_SEVERITY, shop_report, summarize_reviews
     from api_v1 import setup_api
-    from auth import (LoginRequired, clear_cookie, delete_account, end_session,
+    from auth import (LoginRequired, clear_cookie, delete_account, end_all_sessions, end_session,
                       get_current_user, login_required, start_session)
+    from email_verify import PURPOSES, check_code, dev_mode, issue_code, verification_enabled
     from database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
                           seller_risk_keywords, this_month)
     from db import describe_db, get_session
-    from models import (BlindAction, Feedback, IssueType, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                        ReviewAnalysis, ReviewBlindLog, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
+    from models import (BlindAction, Feedback, IngestLog, IssueType, Keyword, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
+                        ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                         UserStatus, visible_reviews)
     from pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
     from reply_drafts import generate_reply_draft
@@ -186,16 +189,120 @@ def login(request: Request,
     return response
 
 
-@app.get("/password-help", name="password_help")
-def password_help(request: Request):
-    """비밀번호 찾기 (MoSCoW: 이번 범위 제외) — 안내만 표시"""
-    flash(request, "비밀번호 찾기는 아직 지원하지 않습니다. 서비스 관리자에게 비밀번호 초기화를 요청해 주세요.", "error")
-    return redirect(request, "login")
+# ──────────────────────────────────────────────
+# 이메일 인증 코드  (회원가입 · 비밀번호 변경 화면에서 fetch 로 호출, email_verify.py)
+# ──────────────────────────────────────────────
+@app.post("/email-code", name="email_code")
+async def email_code(request: Request, db: Session = Depends(get_session)):
+    """{purpose: signup|reset, email} → {ok, message, dev_code?}"""
+    try:
+        body = await request.json()
+    except ValueError:
+        body = {}
+    purpose = str(body.get("purpose", ""))
+    email = str(body.get("email", "")).strip().lower()
+    if purpose not in PURPOSES:
+        return JSONResponse({"ok": False, "message": "잘못된 요청입니다."}, status_code=400)
+    if not EMAIL_RULE.match(email):
+        return JSONResponse({"ok": False, "message": "이메일 형식이 올바르지 않습니다."}, status_code=400)
+
+    existing = db.scalar(select(User).where(User.email == email))
+    if purpose == "signup" and existing is not None:
+        return JSONResponse({"ok": False, "message": "이미 가입된 이메일입니다."}, status_code=409)
+    # 비밀번호 변경: 가입되지 않은 이메일이어도 같은 안내를 보여 줌 (가입 여부 노출 방지, 메일은 보내지 않음)
+    deliver = purpose == "signup" or (existing is not None and existing.status == UserStatus.ACTIVE)
+    ok, message, dev_code = issue_code(request.session, purpose, email, deliver=deliver)
+    payload = {"ok": ok, "message": message}
+    if dev_code:
+        payload["dev_code"] = dev_code          # 개발 모드(메일 서버 미설정)에서만
+    return JSONResponse(payload, status_code=200 if ok else 429)
+
+
+def email_context() -> dict:
+    """회원가입·비밀번호 변경 템플릿에 넘기는 이메일 인증 설정"""
+    return {"email_verification": verification_enabled(), "mail_dev_mode": dev_mode()}
+
+
+# ──────────────────────────────────────────────
+# 비밀번호 변경하기 — 로그인 전 '비밀번호 찾기'  (passwordreset.html, Figma: 비밀번호 변경하기)
+#   이름 + 이메일(+인증 코드) + 사업자 등록 번호가 모두 일치하면 새 비밀번호로 변경
+#   5번 틀리면 10분 잠금, 변경 후에는 모든 기기에서 로그아웃
+# ──────────────────────────────────────────────
+RESET_MAX_FAILS = 5              # 이 횟수만큼 틀리면
+RESET_LOCK_SECONDS = 10 * 60     # 이 시간 동안 잠금
+RESET_FAIL_KEY = "pw_reset_fails"
+
+
+def render_reset(request: Request, status_code: int = 200, form: Optional[dict] = None) -> HTMLResponse:
+    return render(request, "passwordreset.html", status_code=status_code, form=form or {}, **email_context())
+
+
+@app.get("/password-reset", name="password_reset", response_class=HTMLResponse)
+def password_reset_page(request: Request):
+    return render_reset(request)
+
+
+@app.post("/password-reset")
+def password_reset(request: Request,
+                   name: str = Form(""),
+                   email: str = Form(""),
+                   email_code: str = Form(""),
+                   new_password: str = Form(""),
+                   new_password_confirm: str = Form(""),
+                   business_number: str = Form(""),
+                   db: Session = Depends(get_session)):
+    form = {"name": name.strip(), "email": email.strip().lower(), "business_number": business_number.strip()}
+    fails = request.session.get(RESET_FAIL_KEY) or {"count": 0, "until": 0}
+    if fails["until"] > time.time():
+        minutes = int((fails["until"] - time.time()) // 60) + 1
+        flash(request, f"정보가 여러 번 일치하지 않아 잠겼습니다. {minutes}분 뒤에 다시 시도해 주세요.", "error")
+        return render_reset(request, 429, form)
+
+    if not all(form.values()) or not new_password:
+        flash(request, "모든 항목을 입력해 주세요.", "error")
+        return render_reset(request, 400, form)
+    if not PASSWORD_RULE.match(new_password):
+        flash(request, "변경할 " + PASSWORD_RULE_MSG, "error")
+        return render_reset(request, 400, form)
+    if new_password != new_password_confirm:
+        flash(request, "비밀번호 확인이 일치하지 않습니다.", "error")
+        return render_reset(request, 400, form)
+    code_error = check_code(request.session, "reset", form["email"], email_code)
+    if code_error:
+        flash(request, code_error, "error")
+        return render_reset(request, 400, form)
+
+    biz = normalize_business_number(form["business_number"])
+    user = db.scalar(select(User).where(User.email == form["email"], User.status == UserStatus.ACTIVE))
+    # 세 값이 모두 일치해야 함. 어느 값이 틀렸는지는 알려 주지 않음 (계정 존재 여부 노출 방지)
+    if user is None or user.name != form["name"] or biz is None or user.business_number != biz:
+        fails["count"] += 1
+        if fails["count"] >= RESET_MAX_FAILS:
+            fails = {"count": 0, "until": time.time() + RESET_LOCK_SECONDS}
+            flash(request, f"정보가 {RESET_MAX_FAILS}번 일치하지 않아 {RESET_LOCK_SECONDS // 60}분 동안 잠깁니다.", "error")
+        else:
+            flash(request, "입력한 정보와 일치하는 계정이 없습니다. 이름, 이메일, 사업자 등록 번호를 확인해 주세요. "
+                           f"({fails['count']}/{RESET_MAX_FAILS})", "error")
+        request.session[RESET_FAIL_KEY] = fails
+        return render_reset(request, 400, form)
+
+    if verify_password(new_password, user.password_hash):
+        flash(request, "지금 쓰는 비밀번호와 다른 비밀번호를 입력해 주세요.", "error")
+        return render_reset(request, 400, form)
+
+    user.password_hash = hash_password(new_password)
+    end_all_sessions(db, user)              # 다른 기기에 남아 있는 로그인도 모두 종료
+    db.commit()
+    request.session.pop(RESET_FAIL_KEY, None)
+    response = redirect(request, "login")
+    clear_cookie(response)
+    flash(request, "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.")
+    return response
 
 
 @app.get("/signup", name="signup", response_class=HTMLResponse)
 def signup_page(request: Request):
-    return render(request, "joinmembership.html")
+    return render(request, "joinmembership.html", **email_context())
 
 
 @app.post("/signup")
@@ -207,6 +314,7 @@ def signup(request: Request,
            mall_name: str = Form(""),
            mall_platform: str = Form(""),
            business_number: str = Form(""),
+           email_code: str = Form(""),
            db: Session = Depends(get_session)):
     form = {"name": name.strip(), "email": email.strip().lower(), "mall_name": mall_name.strip(),
             "mall_platform": mall_platform, "business_number": business_number.strip()}
@@ -230,10 +338,14 @@ def signup(request: Request,
         error, status = "이미 가입된 이메일입니다.", 409
     elif db.scalar(select(User.id).where(User.business_number == biz)):
         error, status = "이미 등록된 사업자 등록 번호입니다.", 409
+    else:
+        code_error = check_code(request.session, "signup", form["email"], email_code)
+        if code_error:
+            error = code_error
 
     if error:
         flash(request, error, "error")
-        return render(request, "joinmembership.html", status_code=status, form=form)
+        return render(request, "joinmembership.html", status_code=status, form=form, **email_context())
 
     user = User(name=form["name"], email=form["email"], password_hash=hash_password(password),
                 mall_name=form["mall_name"], mall_platform=platform, business_number=biz)
@@ -273,7 +385,36 @@ def dashboard(request: Request,
     stats = db.get(ShopMonthlyStat, (user.id, this_month())) or {"visitors": 0, "buyers": 0}
 
     return render(request, "dashboard.html", active_menu="dashboard",
-                  risky_count=risky_count, recent_reviews=recent_reviews, stats=stats)
+                  risky_count=risky_count, recent_reviews=recent_reviews, stats=stats,
+                  todo=dashboard_todo(db, user))
+
+
+def dashboard_todo(db: Session, user: User) -> list[dict]:
+    """대시보드 '처리할 일' 카드 — 지금 손봐야 할 일과 바로 가는 링크 (건수가 0인 일도 '완료'로 표시)"""
+    mine = visible_reviews().join(Review.product).where(Product.seller_id == user.id)
+    count = lambda stmt: db.scalar(stmt.with_only_columns(func.count(Review.id))) or 0
+    week_ago = date.today() - timedelta(days=6)
+
+    unreplied_risky = count(mine.join(Review.analysis).where(ReviewAnalysis.severity >= RISK_SEVERITY,
+                                                            ~Review.replies.any()))
+    unreplied = count(mine.where(~Review.replies.any()))
+    negative_week = count(mine.join(Review.analysis).where(ReviewAnalysis.sentiment == Polarity.NEG,
+                                                          Review.reviewed_at >= week_ago))
+    last_upload = db.scalar(select(IngestLog.run_at).where(IngestLog.batch_name.startswith(f"upload:{user.id}:"))
+                            .order_by(IngestLog.run_at.desc()).limit(1))
+    has_products = db.scalar(select(Product.id).where(Product.seller_id == user.id).limit(1)) is not None
+    return [
+        {"label": "답글이 필요한 위험 리뷰", "count": unreplied_risky, "unit": "건", "urgent": True,
+         "url": "cschatbot", "query": "", "action": "CS챗봇에서 답글 달기"},
+        {"label": "최근 7일 부정 리뷰", "count": negative_week, "unit": "건", "urgent": False,
+         "url": "review_list", "query": "sentiment=NEG&period=7", "action": "리뷰 목록에서 보기"},
+        {"label": "아직 답글이 없는 리뷰", "count": unreplied, "unit": "건", "urgent": False,
+         "url": "review_list", "query": "replied=no", "action": "리뷰 목록에서 보기"},
+        {"label": "리뷰 데이터 업로드",
+         "count": 0 if has_products else 1, "unit": "",
+         "note": (f"마지막 업로드 {last_upload:%Y.%m.%d}" if last_upload else "아직 업로드 기록이 없습니다"),
+         "urgent": False, "url": "products", "query": "", "action": "CSV 업로드하기"},
+    ]
 
 
 # ──────────────────────────────────────────────
@@ -370,6 +511,28 @@ async def products_upload(request: Request,
     return redirect(request, "products")
 
 
+# ──────────────────────────────────────────────
+# 업로드 이력  ※ /products/{product_id} 보다 먼저 등록해야 함 — 상품 조회 화면의 CSV 업로드 기록  (uploads.html)
+#   ingest_logs 에 셀러 컬럼이 없어 batch_name 'upload:{셀러ID}:{파일명}' 으로 구분 (DB 구조 변경 없음)
+# ──────────────────────────────────────────────
+UPLOAD_HISTORY_LIMIT = 100
+
+
+@app.get("/products/uploads", name="upload_history", response_class=HTMLResponse)
+def upload_history(request: Request,
+                   user: User = Depends(login_required),
+                   db: Session = Depends(get_session)):
+    prefix = f"upload:{user.id}:"
+    logs = db.scalars(select(IngestLog).where(IngestLog.batch_name.startswith(prefix, autoescape=True))
+                      .order_by(IngestLog.run_at.desc(), IngestLog.id.desc()).limit(UPLOAD_HISTORY_LIMIT)).all()
+    rows = [{"run_at": log.run_at, "filename": log.batch_name[len(prefix):], "total": log.total_count,
+             "added": log.total_count - log.duplicate_count - log.missing_count,
+             "duplicate": log.duplicate_count, "missing": log.missing_count} for log in logs]
+    totals = {k: sum(r[k] for r in rows) for k in ("total", "added", "duplicate", "missing")}
+    return render(request, "uploads.html", active_menu="products", rows=rows, totals=totals,
+                  limit=UPLOAD_HISTORY_LIMIT)
+
+
 # ── 상품별 리뷰 필터 (상품별 대시보드의 '상세 리뷰' 목록에만 적용, 상단 통계·요약은 전체 기준)
 REVIEW_PAGE_SIZE = 10
 REVIEW_QUERY_MAX = 100
@@ -404,6 +567,11 @@ def filtered_reviews_stmt(product_id: int, filters: dict):
     stmt = (visible_reviews()
             .outerjoin(ReviewAnalysis, ReviewAnalysis.review_id == Review.id)
             .where(Review.product_id == product_id))
+    return apply_review_filters(stmt, filters)
+
+
+def apply_review_filters(stmt, filters: dict):
+    """감성·이슈·위험·평점·검색어 필터 (상품별 대시보드와 리뷰 목록 화면 공용). ReviewAnalysis 가 조인돼 있어야 함"""
     if filters["sentiment"]:
         stmt = stmt.where(ReviewAnalysis.sentiment == Polarity(filters["sentiment"]))
     if filters["issue"]:
@@ -474,6 +642,146 @@ def product_dashboard(request: Request,
                   sentiment_labels=SENTIMENT_LABELS, issue_labels=ISSUE_LABELS,
                   severity_labels=SEVERITY_LABELS,
                   sort_labels={k: label for k, (label, _) in REVIEW_SORTS.items()})
+
+
+# ──────────────────────────────────────────────
+# 리뷰 목록 — 모든 상품의 리뷰를 한 곳에서 검색·필터  (reviews.html)
+# ──────────────────────────────────────────────
+REVIEW_LIST_PAGE_SIZE = 20
+REVIEW_PERIODS = {"7": "최근 7일", "30": "최근 30일", "90": "최근 3개월", "365": "최근 1년"}
+
+
+@app.get("/reviews", name="review_list", response_class=HTMLResponse)
+def review_list(request: Request,
+                product_id: str = "",
+                sentiment: str = "",
+                issue: str = "",
+                risk: str = "",
+                rating: str = "",
+                q: str = "",
+                sort: str = "latest",
+                period: str = "",
+                replied: str = "",
+                status: str = "",
+                page: str = "1",
+                user: User = Depends(login_required),
+                db: Session = Depends(get_session)):
+    """내 모든 상품의 리뷰 — 상품·감성·이슈·위험·평점·기간·답글 여부·블라인드·검색어 필터 + 정렬 + 페이지"""
+    products = db.scalars(select(Product).where(Product.seller_id == user.id).order_by(Product.id)).all()
+    product_ids = {str(p.id) for p in products}
+
+    filters = review_filters(sentiment, issue, risk, rating, q, sort)
+    filters.update({
+        "product_id": product_id if product_id in product_ids else "",        # 남의 상품 ID 는 무시
+        "period": period if period in REVIEW_PERIODS else "",
+        "replied": replied if replied in ("yes", "no") else "",
+        "status": "BLINDED" if status == "BLINDED" else "",
+    })
+
+    stmt = (select(Review).join(Review.product)
+            .outerjoin(ReviewAnalysis, ReviewAnalysis.review_id == Review.id)
+            .where(Product.seller_id == user.id,
+                   Review.status == (ReviewStatus.BLINDED if filters["status"] else ReviewStatus.VISIBLE)))
+    stmt = apply_review_filters(stmt, filters)
+    if filters["product_id"]:
+        stmt = stmt.where(Review.product_id == int(filters["product_id"]))
+    if filters["period"]:
+        stmt = stmt.where(Review.reviewed_at >= date.today() - timedelta(days=int(filters["period"]) - 1))
+    if filters["replied"]:
+        stmt = stmt.where(Review.replies.any() if filters["replied"] == "yes" else ~Review.replies.any())
+
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    pages = max(1, -(-total // REVIEW_LIST_PAGE_SIZE))
+    page = min(max(int(page) if page.isdigit() else 1, 1), pages)
+    reviews = db.scalars(
+        stmt.options(selectinload(Review.analysis), selectinload(Review.product), selectinload(Review.replies))
+        .order_by(*REVIEW_SORTS[filters["sort"]][1]())
+        .limit(REVIEW_LIST_PAGE_SIZE).offset((page - 1) * REVIEW_LIST_PAGE_SIZE)
+    ).all()
+    active_filters = {k: v for k, v in filters.items() if v and not (k == "sort" and v == "latest")}
+
+    return render(request, "reviews.html", active_menu="reviews", reviews=reviews, products=products,
+                  filters=filters, active_filters=active_filters, total=total, page=page, pages=pages,
+                  sentiment_labels=SENTIMENT_LABELS, issue_labels=ISSUE_LABELS, severity_labels=SEVERITY_LABELS,
+                  period_labels=REVIEW_PERIODS,
+                  sort_labels={k: label for k, (label, _) in REVIEW_SORTS.items()})
+
+
+# ──────────────────────────────────────────────
+# 상품 비교 (FR-15, US-17) — 두 상품의 평점·감성·이슈·키워드를 나란히  (compare.html)
+# ──────────────────────────────────────────────
+def product_profile(db: Session, user: User, product: Product) -> dict:
+    """비교 화면 한 칸에 들어가는 상품 요약 (공개 리뷰 기준)"""
+    reviews = db.scalars(visible_reviews().where(Review.product_id == product.id)
+                         .options(selectinload(Review.analysis))).all()
+    analyzed = [r for r in reviews if r.analysis]
+    n = len(reviews)
+    pos = sum(1 for r in analyzed if r.analysis.sentiment == Polarity.POS)
+    neg = sum(1 for r in analyzed if r.analysis.sentiment == Polarity.NEG)
+    issues = {label: sum(1 for r in analyzed if r.analysis.issue_type and r.analysis.issue_type.value == key)
+              for key, label in ISSUE_LABELS.items()}
+    keyword_rows = db.execute(
+        select(Keyword.word, Keyword.polarity, func.count(ReviewKeyword.review_id))
+        .join(ReviewKeyword, ReviewKeyword.keyword_id == Keyword.id)
+        .join(Review, Review.id == ReviewKeyword.review_id)
+        .where(Review.product_id == product.id, Review.status == ReviewStatus.VISIBLE)
+        .group_by(Keyword.id, Keyword.word, Keyword.polarity)
+        .order_by(func.count(ReviewKeyword.review_id).desc(), Keyword.word).limit(5)
+    ).all()
+    stat = db.get(ProductMonthlyStat, (product.id, this_month()))
+    return {
+        "product": product, "review_count": n,
+        "avg_rating": sum(r.rating for r in reviews) / n if n else None,
+        "positive": pos, "negative": neg, "analyzed": len(analyzed),
+        "positive_ratio": pos / len(analyzed) if analyzed else 0, "negative_ratio": neg / len(analyzed) if analyzed else 0,
+        "risky": sum(1 for r in analyzed if r.analysis.severity >= RISK_SEVERITY),
+        "issues": issues, "keywords": keyword_rows, "buyers": stat.buyers if stat else 0,
+    }
+
+
+def compare_summary(a: dict, b: dict) -> list[str]:
+    """두 상품의 차이를 문장으로"""
+    lines = []
+    name_a, name_b = a["product"].name, b["product"].name
+    if a["avg_rating"] is not None and b["avg_rating"] is not None:
+        diff = a["avg_rating"] - b["avg_rating"]
+        if abs(diff) < 0.05:
+            lines.append("두 상품의 평균 평점이 비슷합니다.")
+        else:
+            hi, lo = (name_a, name_b) if diff > 0 else (name_b, name_a)
+            lines.append(f"'{hi}'의 평균 평점이 '{lo}'보다 {abs(diff):.1f}점 높습니다.")
+    if a["analyzed"] and b["analyzed"]:
+        diff = (a["negative_ratio"] - b["negative_ratio"]) * 100
+        if abs(diff) >= 5:
+            hi = name_a if diff > 0 else name_b
+            lines.append(f"'{hi}'의 부정 리뷰 비율이 {abs(diff):.0f}%p 더 높습니다.")
+    for prof, other in ((a, b), (b, a)):
+        top = max(prof["issues"].items(), key=lambda kv: kv[1])
+        if top[1] and top[1] > other["issues"][top[0]]:
+            lines.append(f"'{prof['product'].name}'은(는) '{top[0]}' 관련 불만이 더 많습니다.")
+    return lines or ["두 상품 모두 아직 비교할 만한 리뷰가 많지 않습니다."]
+
+
+@app.get("/compare", name="compare_products", response_class=HTMLResponse)
+def compare_products(request: Request,
+                     a: str = "",
+                     b: str = "",
+                     user: User = Depends(login_required),
+                     db: Session = Depends(get_session)):
+    products = db.scalars(select(Product).where(Product.seller_id == user.id).order_by(Product.id)).all()
+    by_id = {str(p.id): p for p in products}
+    if len(products) < 2:
+        return render(request, "compare.html", active_menu="analysis", products=products, left=None, right=None,
+                      summary=[])
+    # 지정하지 않았거나 남의 상품이면 앞의 두 상품. 같은 상품 둘을 고르면 두 번째를 다른 상품으로
+    pa = by_id.get(a) or products[0]
+    pb = by_id.get(b) or next(p for p in products if p.id != pa.id)
+    if pb.id == pa.id:
+        pb = next(p for p in products if p.id != pa.id)
+        flash(request, "서로 다른 두 상품을 골라 주세요.", "error")
+    left, right = product_profile(db, user, pa), product_profile(db, user, pb)
+    return render(request, "compare.html", active_menu="analysis", products=products,
+                  left=left, right=right, summary=compare_summary(left, right))
 
 
 # ──────────────────────────────────────────────
@@ -832,10 +1140,18 @@ def withdraw(request: Request,
     delete_account(db, user)
     db.commit()
 
-    response = redirect(request, "login")
+    response = redirect(request, "withdrawn")
     clear_cookie(response)
-    flash(request, "회원 탈퇴가 완료되었습니다.")
+    request.session["withdrawn"] = True       # 탈퇴 완료 화면을 한 번만 보여 주기 위한 표시
     return response
+
+
+@app.get("/withdrawn", name="withdrawn", response_class=HTMLResponse)
+def withdrawn_page(request: Request):
+    """회원 탈퇴 완료 (Figma: 회원 탈퇴가 완료되었습니다 / 처음으로 돌아가기). 탈퇴 직후가 아니면 로그인 화면으로"""
+    if not request.session.pop("withdrawn", False):
+        return redirect(request, "login")
+    return render(request, "withdrawn.html")
 
 
 # ──────────────────────────────────────────────

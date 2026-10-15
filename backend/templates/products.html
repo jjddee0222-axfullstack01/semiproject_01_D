@@ -342,7 +342,11 @@
         <div class="upload-card">
             <div class="upload-head">
                 <div class="upload-title">리뷰 데이터 업로드 (CSV)</div>
-                <a href="{{ url_for('products_upload_template') }}">양식 내려받기</a>
+                <span>
+                    <a href="{{ url_for('products_upload_template') }}">양식 내려받기</a> ·
+                    <a href="{{ url_for('upload_history') }}">업로드 이력</a> ·
+                    <a href="{{ url_for('compare_products') }}">상품 비교</a>
+                </span>
             </div>
             <div class="upload-guide">
                 필수 열: <b>상품명, 평점(1~5), 리뷰내용, 작성일(2026-10-01)</b> · 선택 열: 카테고리, 작성자, 상품설명<br>

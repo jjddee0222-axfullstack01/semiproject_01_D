@@ -40,6 +40,9 @@ else:
 os.environ["INTERNAL_API_KEY"] = "test-internal-key"
 os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["COOKIE_SECURE"] = "0"
+# 이메일 인증 코드: 기존 테스트는 끄고(0), 인증 테스트에서만 monkeypatch 로 켬. 메일 서버는 사용하지 않음(개발 모드)
+os.environ["EMAIL_VERIFICATION"] = "0"
+os.environ.pop("MAIL_HOST", None)
 
 import security  # noqa: E402
 

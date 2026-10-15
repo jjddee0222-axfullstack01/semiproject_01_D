@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIN POINT REVIEW - 리뷰 목록</title>
+    {% include '_layout_styles.html' %}
+    <style>
+        .review-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            padding: 14px;
+            border-radius: 8px;
+            background-color: #F8F9FA;
+            margin-bottom: 8px;
+        }
+
+        .review-row.risky {
+            border-left: 3px solid #FA5252;
+        }
+
+        .review-meta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: #868E96;
+        }
+
+        .review-meta .product {
+            color: #111111;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .review-meta .product:hover {
+            text-decoration: underline;
+        }
+
+        .review-text {
+            font-size: 13px;
+            color: #333333;
+            line-height: 1.5;
+            word-break: break-all;
+        }
+
+        .review-side {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .blind-reason {
+            margin-top: 6px;
+            font-size: 12px;
+            color: #868E96;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 14px;
+        }
+
+        .tabs a {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #555555;
+            text-decoration: none;
+        }
+
+        .tabs a.on {
+            background-color: #111111;
+            color: #ffffff;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+    {% include '_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="page-title-area">
+            <h1 class="page-title">리뷰 목록</h1>
+            <span class="page-guide">모든 상품의 리뷰를 한 곳에서 찾아볼 수 있습니다.</span>
+        </div>
+        {% include '_flash.html' %}
+
+        {% set list_url = url_for('review_list') %}
+        <div class="card">
+            <!-- 공개 / 블라인드 탭 -->
+            <nav class="tabs" aria-label="리뷰 상태">
+                <a href="{{ list_url }}?{{ dict(active_filters, status='', page='')|urlencode }}" class="{{ '' if filters.status else 'on' }}">공개 리뷰</a>
+                <a href="{{ list_url }}?{{ dict(active_filters, status='BLINDED', page='')|urlencode }}" class="{{ 'on' if filters.status else '' }}">블라인드된 리뷰</a>
+            </nav>
+
+            <form class="filter-bar" method="get" action="{{ list_url }}">
+                {% if filters.status %}<input type="hidden" name="status" value="BLINDED">{% endif %}
+                <select name="product_id" aria-label="상품">
+                    <option value="">전체 상품</option>
+                    {% for p in products %}<option value="{{ p.id }}" {% if filters.product_id == p.id|string %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+                </select>
+                <select name="period" aria-label="기간">
+                    <option value="">전체 기간</option>
+                    {% for key, label in period_labels.items() %}<option value="{{ key }}" {% if filters.period == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+                <select name="sentiment" aria-label="감성">
+                    <option value="">긍정·부정 전체</option>
+                    {% for key, label in sentiment_labels.items() %}<option value="{{ key }}" {% if filters.sentiment == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+                <select name="issue" aria-label="이슈 유형">
+                    <option value="">이슈 전체</option>
+                    {% for key, label in issue_labels.items() %}<option value="{{ key }}" {% if filters.issue == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+                <select name="rating" aria-label="평점">
+                    <option value="">평점 전체</option>
+                    {% for n in ['5', '4', '3', '2', '1'] %}<option value="{{ n }}" {% if filters.rating == n %}selected{% endif %}>★ {{ n }}</option>{% endfor %}
+                </select>
+                <select name="replied" aria-label="답글 여부">
+                    <option value="">답글 전체</option>
+                    <option value="no" {% if filters.replied == 'no' %}selected{% endif %}>답글 없음</option>
+                    <option value="yes" {% if filters.replied == 'yes' %}selected{% endif %}>답글 있음</option>
+                </select>
+                <select name="sort" aria-label="정렬">
+                    {% for key, label in sort_labels.items() %}<option value="{{ key }}" {% if filters.sort == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+                <label class="filter-check"><input type="checkbox" name="risk" value="1" {% if filters.risk %}checked{% endif %}> 위험 리뷰만</label>
+                <input type="search" name="q" value="{{ filters.q }}" maxlength="100" placeholder="리뷰 내용 검색" aria-label="리뷰 내용 검색">
+                <button type="submit" class="btn-filter">적용</button>
+                {% if active_filters and active_filters != {'status': 'BLINDED'} %}<a class="filter-reset" href="{{ list_url }}{% if filters.status %}?status=BLINDED{% endif %}">초기화</a>{% endif %}
+            </form>
+            <div class="filter-summary">조건에 맞는 리뷰 <b>{{ "{:,}".format(total) }}</b>건 · {{ page }} / {{ pages }} 페이지</div>
+
+            {% for r in reviews %}
+            {% set a = r.analysis %}
+            {% set risky = a and a.severity >= RISK_SEVERITY %}
+            <div class="review-row{{ ' risky' if risky and not filters.status }}">
+                <div>
+                    <div class="review-meta">
+                        <a class="product" href="{{ url_for('product_dashboard', product_id=r.product_id) }}">{{ r.product.name }}</a>
+                        <span>★ {{ r.rating }}</span>
+                        <span>{{ (r.reviewer_name or '익명')|mask_name }}</span>
+                        <span>{{ r.reviewed_at|dotdate }}</span>
+                        {% if a %}
+                        <span class="tag tag-{{ a.sentiment.value|lower }}">{{ sentiment_labels[a.sentiment.value] }}</span>
+                        {% if a.issue_type %}<span class="tag">{{ issue_labels[a.issue_type.value] }}</span>{% endif %}
+                        {% if risky %}<span class="tag tag-risk">{{ severity_labels[a.severity] }}</span>{% endif %}
+                        {% endif %}
+                        {% if r.replies %}<span class="tag tag-done">답글 {{ r.replies|length }}</span>{% endif %}
+                        {% if filters.status %}<span class="tag tag-blind">블라인드</span>{% endif %}
+                    </div>
+                    <div class="review-text">{{ r.content_raw }}</div>
+                    {% if filters.status %}<div class="blind-reason">사유: {{ r.blind_reason }}{% if r.blinded_at %} · {{ r.blinded_at|dotdate }} 처리{% endif %}</div>{% endif %}
+                </div>
+                <div class="review-side">
+                    <a class="text-link" href="{{ url_for('product_dashboard', product_id=r.product_id) }}">상품에서 보기 →</a>
+                    {% if not r.replies and not filters.status %}<a class="text-link" href="{{ url_for('cschatbot') }}">답글 달기</a>{% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="review-empty">{% if active_filters %}조건에 맞는 리뷰가 없습니다. 필터를 바꾸거나 초기화해 주세요.{% else %}아직 등록된 리뷰가 없습니다. 상품 조회 화면에서 리뷰 CSV를 업로드해 보세요.{% endif %}</div>
+            {% endfor %}
+
+            {% if pages > 1 %}
+            <nav class="pagination" aria-label="리뷰 페이지">
+                {% if page > 1 %}<a href="{{ list_url }}?{{ dict(active_filters, page=page - 1)|urlencode }}">&larr; 이전</a>{% endif %}
+                {% for n in range([1, page - 4]|max, [pages, page + 4]|min + 1) %}
+                {% if n == page %}<span class="current" aria-current="page">{{ n }}</span>{% else %}<a href="{{ list_url }}?{{ dict(active_filters, page=n)|urlencode }}">{{ n }}</a>{% endif %}
+                {% endfor %}
+                {% if page < pages %}<a href="{{ list_url }}?{{ dict(active_filters, page=page + 1)|urlencode }}">다음 &rarr;</a>{% endif %}
+            </nav>
+            {% endif %}
+        </div>
+    </main>
+
+</body>
+</html>

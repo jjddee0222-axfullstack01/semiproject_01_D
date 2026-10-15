@@ -192,6 +192,75 @@
             font-weight: 700;
             color: #111111;
         }
+
+        /* 처리할 일 */
+        .todo-card {
+            margin-bottom: 20px;
+        }
+
+        .todo-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .todo-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 14px;
+            border-radius: 8px;
+            background-color: #F8F9FA;
+            border: 1px solid #F1F3F5;
+            text-decoration: none;
+            color: #333333;
+            transition: border-color 0.2s;
+        }
+
+        .todo-item:hover {
+            border-color: #ADB5BD;
+        }
+
+        .todo-item.urgent {
+            background-color: #FFF5F5;
+            border-color: #FFE3E3;
+        }
+
+        .todo-label {
+            font-size: 12px;
+            color: #666666;
+        }
+
+        .todo-count {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .todo-item.urgent .todo-count {
+            color: #E03131;
+        }
+
+        .todo-count.done {
+            font-size: 14px;
+            color: #2B8A3E;
+        }
+
+        .todo-note {
+            font-size: 12px;
+            color: #868E96;
+        }
+
+        .todo-action {
+            margin-top: auto;
+            font-size: 12px;
+            font-weight: 600;
+            color: #111111;
+        }
+
+        @media (max-width: 1100px) {
+            .todo-grid { grid-template-columns: 1fr 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -202,6 +271,23 @@
     <main class="main-content">
         <h1 class="page-title">{{ current_user.mall_name }} 대시보드</h1>
         {% include '_flash.html' %}
+
+        <!-- 처리할 일: 지금 손봐야 할 일과 바로 가는 링크 -->
+        <div class="card todo-card">
+            <div class="card-title">처리할 일</div>
+            <div class="todo-grid">
+                {% for t in todo %}
+                <a class="todo-item{{ ' urgent' if t.urgent and t.count }}" href="{{ url_for(t.url) }}{% if t.query %}?{{ t.query }}{% endif %}">
+                    <span class="todo-label">{{ t.label }}</span>
+                    {% if t.unit %}
+                    {% if t.count %}<span class="todo-count">{{ "{:,}".format(t.count) }}{{ t.unit }}</span>
+                    {% else %}<span class="todo-count done">✓ 처리할 항목 없음</span>{% endif %}
+                    {% else %}<span class="todo-note">{{ t.note }}</span>{% endif %}
+                    <span class="todo-action">{{ t.action }} →</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
 
         <div class="dashboard-grid">
             <!-- 왼쪽 영역 -->

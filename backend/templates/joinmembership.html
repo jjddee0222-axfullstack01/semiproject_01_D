@@ -124,6 +124,8 @@
                 <label for="email">이메일</label>
                 <input type="email" id="email" name="email" value="{{ form.email or '' }}" placeholder="이메일을 입력해주세요." autocomplete="username" required>
             </div>
+
+            {% set code_purpose = 'signup' %}{% include '_email_code.html' %}
             
             <div class="input-group">
                 <label for="password">비밀번호</label>

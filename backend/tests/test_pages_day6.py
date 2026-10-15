@@ -129,8 +129,7 @@ def test_settings_error_still_shows_keywords(page):
     assert r.status_code == 401 and r.text.count('class="keyword-chip"') == 18
 
 
-# ── 비밀번호 찾기 (빈 링크 대신 안내)
-def test_password_help(client):
+# ── 로그인 화면의 '비밀번호 찾기' 링크
+def test_login_links_to_password_reset(client):
     login = client.get("/login").text
-    assert 'href="#"' not in login and "/password-help" in login
-    assert "관리자에게 비밀번호 초기화" in client.get("/password-help").text
+    assert 'href="#"' not in login and 'href="http://testserver/password-reset"' in login

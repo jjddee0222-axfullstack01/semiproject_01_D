@@ -1210,7 +1210,7 @@ def feedback(request: Request,
              db: Session = Depends(get_session)):
     complaint, suggestion = complaint.strip(), suggestion.strip()
     if not complaint or not suggestion:
-        flash(request, "불편 사항과 뭐시기 사항을 모두 입력해 주세요.", "error")
+        flash(request, "불편 사항과 기타 제한 사항을 모두 입력해 주세요.", "error")
         return render(request, "sendfeedback.html", status_code=400, active_menu="feedback",
                       form={"complaint": complaint, "suggestion": suggestion})
 

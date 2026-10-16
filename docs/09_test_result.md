@@ -5,7 +5,7 @@
 | 항목 | 내용 |
 |---|---|
 | 실행일 | 2026-10-15 (7일차 품질 점검·2차 점검), 2026-10-16 (8일차 Agent Task 후 재실행) |
-| 대상 | `main` 최신 코드 + 7일차 수정 (중립 분류, 인증·로그인 보안 강화, 위험 키워드 즉시 반영) + 7일차 2차 점검 수정 (I-17~I-23) + 8일차 Agent Task T-8-1 (CSV 입력 검증, `GET /api/v1/health`) |
+| 대상 | `main` 최신 코드 + 7일차 수정 (중립 분류, 인증·로그인 보안 강화, 위험 키워드 즉시 반영) + 7일차 2차 점검 수정 (I-17\~I-23) + 8일차 Agent Task T-8-1 (CSV 입력 검증, `GET /api/v1/health`) |
 | 환경 | Python 3.13, FastAPI 0.143, SQLAlchemy 2.0.36, Pydantic 2.13, pytest 9.0, 임시 SQLite DB |
 | 브라우저 시나리오 | uvicorn 로컬 서버(최상위 폴더에서 `uvicorn main:app`) + Chromium (Playwright 1.56), 데스크톱 1280px · 휴대폰 390px |
 
@@ -14,8 +14,8 @@
 | 구분 | 결과 |
 |---|---|
 | 자동 테스트 | **335개 중 335개 통과** (실패 0, 건너뜀 0) |
-| 사용자 시나리오 | **12개 중 12개 통과** (S-01 ~ S-12, 8일차 코드로 다시 실행) |
-| Must 기능(FR-01~08) 정상 동작률 | **100%** |
+| 사용자 시나리오 | **12개 중 12개 통과** (S-01 \~ S-12, 8일차 코드로 다시 실행) |
+| Must 기능(FR-01\~08) 정상 동작률 | **100%** |
 | MariaDB 호환 | 테스트 중 실행된 SQL 32,424건을 MariaDB 방언으로 생성 → 오류 0건 |
 | 발견·해결한 문제 | 25건 (높음 6, 중간 10, 낮음 9) — 모두 해결 |
 | 정적 점검 (Dead Code·중복 코드) | 쓰이지 않는 코드 1건 삭제, 중복 2곳 확인 (5장) |
@@ -78,14 +78,14 @@ cd backend && python -m pytest
 
 | 요구사항 | 확인 방법 | 결과 |
 |---|---|---|
-| FR-01~04 계정 (Must) | `test_api_auth.py`, `test_pages.py`, S-01·S-10 | 통과 |
-| FR-05~06 상품·리뷰·블라인드 (Must) | `test_api_products_reviews.py`, `test_pages_review_filter.py`, S-05 | 통과 |
-| FR-07~08 통계·대시보드 (Must) | `test_api_stats.py`, `test_pages_day6.py`, S-06 | 통과 |
-| FR-09~19 Should·Could | `test_api_*.py`, `test_pages_analysis_cs.py`, `test_pages_upload.py`, S-04·S-07 | 통과 |
-| FR-20~25 (비밀번호 변경·이메일 인증·리뷰 목록·업로드 이력·처리할 일·모바일) | `test_pages_password_reset.py`, `test_pages_email_verify.py`, `test_pages_extra.py`, S-03·S-09·S-11 | 통과 |
+| FR-01\~04 계정 (Must) | `test_api_auth.py`, `test_pages.py`, S-01·S-10 | 통과 |
+| FR-05\~06 상품·리뷰·블라인드 (Must) | `test_api_products_reviews.py`, `test_pages_review_filter.py`, S-05 | 통과 |
+| FR-07\~08 통계·대시보드 (Must) | `test_api_stats.py`, `test_pages_day6.py`, S-06 | 통과 |
+| FR-09\~19 Should·Could | `test_api_*.py`, `test_pages_analysis_cs.py`, `test_pages_upload.py`, S-04·S-07 | 통과 |
+| FR-20\~25 (비밀번호 변경·이메일 인증·리뷰 목록·업로드 이력·처리할 일·모바일) | `test_pages_password_reset.py`, `test_pages_email_verify.py`, `test_pages_extra.py`, S-03·S-09·S-11 | 통과 |
 | FR-26 중립 분류 | `test_unit.py`, `test_neutral_sentiment.py`, S-06·S-07·S-09 | 통과 |
 | FR-27 위험 키워드 즉시 반영 | `test_pages_day6.py`, `test_api_risk_keywords.py`, S-08 | 통과 |
-| NFR-01~11 보안·품질 | `test_security_limits.py`, `test_review_fixes.py`, `test_unit.py`, `test_models.py`, S-02·S-12 | 통과 |
+| NFR-01\~11 보안·품질 | `test_security_limits.py`, `test_review_fixes.py`, `test_unit.py`, `test_models.py`, S-02·S-12 | 통과 |
 
 ## 5. 정적 점검 (9일차 기준: Dead Code·중복 코드 탐색)
 

@@ -127,9 +127,9 @@ sudo apt install -y certbot python3-certbot-nginx && sudo certbot --nginx -d 도
 
 | 기준 | 확인 방법 | 결과 |
 |---|---|---|
-| 프로그램 실행 가능 | `systemctl status pinpoint` 가 active | |
+| 프로그램 실행 가능 | `systemctl status pinpoint` 가 active, `curl https://도메인/api/v1/health` → `{"status":"ok","database":"ok",...}` | |
 | 핵심 기능 정상 | `07_test_plan.md` 시나리오 S-01~S-12 를 배포 주소에서 실행 | |
-| DB 연결 정상 | 시작 로그의 `[PIN POINT] DB: mariadb+pymysql://...`, 로그인·대시보드 숫자 표시 | |
+| DB 연결 정상 | `/api/v1/health` 의 `"database": "ok"` (DB 가 꺼져 있으면 503), 시작 로그의 `[PIN POINT] DB: mariadb+pymysql://...` | |
 | Frontend·Backend 연결 정상 | 쇼핑몰 분석 화면 차트 표시 (`/api/v1/stats/*` 호출 성공) | |
 | 오류 처리 가능 | 없는 주소 → 404 화면, 남의 상품 → 404, 로그인 5회 실패 → 잠금 안내 | |
 | README 존재 | 저장소 최상위 `README.md` | 있음 |

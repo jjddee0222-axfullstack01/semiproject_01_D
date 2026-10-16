@@ -577,12 +577,6 @@ class ReviewCreateResult(ResponseModel):
     is_risky: bool
 
 
-class FeedbackCreate(RequestModel):
-    """의견 보내기 (보조 테이블 feedbacks)"""
-    complaint: str = Field(..., min_length=1, max_length=5000)
-    suggestion: str = Field(..., min_length=1, max_length=5000)
-
-
 # 자기 자신·뒤쪽 클래스를 참조하는 스키마 완성
 ReplyOut.model_rebuild()
 ReviewDetailOut.model_rebuild()

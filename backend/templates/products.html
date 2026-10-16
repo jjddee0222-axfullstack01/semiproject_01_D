@@ -349,7 +349,7 @@
                 </span>
             </div>
             <div class="upload-guide">
-                필수 열: <b>상품명, 평점(1~5), 리뷰내용, 작성일(2026-10-01)</b> · 선택 열: 카테고리, 작성자, 상품설명<br>
+                필수 열: <b>상품명, 평점(1~5 정수), 리뷰내용, 작성일(2026-10-01, 오늘 이전)</b> · 선택 열: 카테고리, 작성자, 상품설명<br>
                 같은 상품·작성자·작성일·내용의 리뷰는 중복으로 보고 건너뜁니다. 최대 5MB · 10,000행, UTF-8 또는 엑셀 CSV.
             </div>
             <form class="upload-form" method="post" action="{{ url_for('products_upload') }}" enctype="multipart/form-data">

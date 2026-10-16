@@ -66,7 +66,7 @@ def test_upload_reports_bad_rows(page, session):
                 "A상품,4,날짜 오류,어제\n")
     r = upload(page, csv_text)
     assert "리뷰 1건 추가, 오류 4건 건너뜀" in r.text
-    for text in ("3행(상품명 없음)", "4행(평점은 1~5)", "5행(리뷰내용 없음)", "6행(작성일 형식 오류)"):
+    for text in ("3행(상품명 없음)", "4행(평점은 1~5 정수)", "5행(리뷰내용 없음)", "6행(작성일 형식 오류)"):
         assert text in r.text, text
 
 

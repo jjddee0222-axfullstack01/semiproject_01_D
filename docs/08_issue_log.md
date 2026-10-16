@@ -10,8 +10,8 @@
 | 구분 | 건수 | 상태 |
 |---|---|---|
 | 높음 | 6 | 모두 해결 |
-| 중간 | 9 | 모두 해결 |
-| 낮음 | 8 | 모두 해결 |
+| 중간 | 10 | 모두 해결 |
+| 낮음 | 9 | 모두 해결 |
 
 ## 이슈 목록
 
@@ -24,22 +24,24 @@
 | I-05 | 업로드 이력 구현 (2026-10-15) | 중간 | `/products/uploads` 접속 시 422 오류 | `/products/{product_id}` 경로가 먼저 등록되어 'uploads' 를 상품 ID 로 해석 | 업로드 이력 경로를 상품 상세 경로보다 먼저 등록 | `test_pages_extra.py` (업로드 이력) |
 | I-06 | 2026-10-14 | 낮음 | `docs/06_architecture.md` 에 Git 병합 충돌 표시(`<<<<<<<`, `>>>>>>>`)가 그대로 올라감 | 병합 충돌을 해결하지 않고 커밋 (1c57e76 병합) | 실제 반영 결과 기준으로 한 표로 정리 | 저장소 전체에서 충돌 표시 검색 0건 |
 | I-07 | 2026-10-15 | 중간 | 설정에서 위험 키워드를 추가·삭제해도 대시보드·통계가 바뀌지 않음 | 키워드 목록만 바꾸고 이미 저장된 분석 결과는 '기존 리뷰 다시 분석' 버튼을 눌러야 갱신됨 (화면·API 모두) | 추가·수정·삭제 시 그 단어가 들어간 리뷰를 즉시 재분석 (`reanalyze_seller_reviews`) | `test_pages_day6.py`, `test_api_risk_keywords.py::test_keyword_change_applies_to_existing_reviews` |
-| I-08 | 9일차 점검 (2026-10-15) | 높음 | 이메일 인증 코드를 5번 넘게 시도할 수 있음 | 코드 정보와 틀린 횟수를 브라우저 쿠키에 저장 → 발급 직후 쿠키로 되돌리면 횟수가 초기화됨. `SECRET_KEY` 가 예시 값이면 쿠키 속 해시로 코드를 알아낼 수도 있음 | 코드 정보를 서버 메모리에만 저장, 쿠키에는 남기지 않음 (`email_verify.py`) | `test_security_limits.py::test_old_cookie_replay_cannot_reset_tries`, `test_code_not_stored_in_cookie` |
-| I-09 | 9일차 점검 | 높음 | 비밀번호 찾기 10분 잠금이 쿠키를 지우면 풀림 | 실패 횟수를 쿠키에 저장 | 이메일·IP 기준으로 서버에 기록 (`rate_limit.password_reset`) | `test_reset_lock_survives_cookie_clear` |
-| I-10 | 9일차 점검 | 높음 | 로그인 실패 횟수 제한이 없어 비밀번호를 계속 대입할 수 있음 (30회 실패 후에도 로그인됨) | 로그인 시도 제한 미구현 | 같은 이메일 5회·같은 IP 20회 실패 시 10분 잠금. 화면과 API 공통 (`rate_limit.py`) | `test_login_locks_after_five_failures`, `test_api_login_shares_lock` |
-| I-11 | 9일차 점검 | 높음 | REST API 회원가입은 이메일 인증 없이 가입됨 | 인증 확인을 화면 회원가입에만 넣음 | `POST /api/v1/auth/signup` 에 `email_code` 확인 추가 (`EMAIL_CODE_INVALID`) | `test_api_signup_requires_email_code` |
-| I-12 | 9일차 점검 | 중간 | 인증 메일을 무제한으로 요청할 수 있음 (메일 폭탄·코드 재발급 반복) | 재발송 60초 대기만 있고 총 횟수 제한 없음 | 이메일당 1시간 5회, IP당 1시간 20회 | `test_send_limit_per_email`, `test_send_limit_per_ip` |
-| I-13 | 9일차 점검 | 중간 | 3점 리뷰가 모두 '부정'으로 분류되어 중립이 0건, 부정 비율이 실제보다 높게 나옴 (데모 데이터 부정 비율 55% → 실제 27%) | 분석 규칙이 4점 이상만 긍정, 나머지는 모두 부정 | 위험 키워드 없는 3점 리뷰는 중립(NEU). 규칙 버전 `rule-v2`, 서버 시작 시 예전 결과 자동 재분석 | `test_unit.py`, `test_neutral_sentiment.py`, `test_api_stats.py::test_summary` |
-| I-14 | 9일차 점검 | 중간 | 서명 키(`SECRET_KEY`)를 예시 값 그대로 써도 아무 경고가 없음 | 시작 시 점검 없음 | 비었거나 예시 값이면 서버 시작 시 경고 문구 출력 | `test_secret_key_warning` |
-| I-15 | 9일차 점검 | 낮음 | 쓰지 않는 시안 `frontend/passwordreset_new.html` 이 저장소에 남아 있음 | 비밀번호 변경 화면을 Figma 기준 한 화면으로 바꾼 뒤 정리하지 않음 | 이번 커밋에서 `git rm frontend/passwordreset_new.html` 로 삭제 | 저장소 파일 목록 |
-| I-16 | 9일차 점검 | 낮음 | `backend/tests/__pycache__/*.pyc` 14개가 저장소에 올라가 있음 | `.gitignore` 에 `__pycache__/` 를 넣기 전에 커밋되어 계속 추적됨 | `git rm -r --cached backend/tests/__pycache__` 로 추적 해제 (파일은 PC 에 남음) | `git ls-files \| grep pyc` 결과 0건 |
-| I-17 | 10일차 점검 (2026-10-15) | 중간 | 리뷰 CSV 내보내기에 엑셀 수식이 그대로 들어감. 본문이 `=HYPERLINK("http://...","클릭")` 이면 엑셀에서 열 때 링크·수식으로 동작 (CSV 수식 주입) | 고객이 쓴 리뷰 본문·작성자명을 그대로 CSV 칸에 씀 | `=`, `+`, `-`, `@` 로 시작하는 글자 칸 앞에 `'` 를 붙여 글자로 취급 (`api_v1.csv_safe`) | `test_review_fixes.py::test_review_export_neutralizes_formula`, `test_csv_safe` |
-| I-18 | 10일차 점검 | 중간 | 메일 서버 없이 HTTPS 운영 설정(`COOKIE_SECURE=1`)으로 배포하면 인증 코드가 화면에 표시됨 → 공개 정보(이름·이메일·사업자 번호)만으로 남의 비밀번호 변경 가능, 가입 여부도 드러남 | `MAIL_HOST` 가 없으면 운영 여부와 관계없이 개발 모드로 동작 | 운영 설정에서는 코드를 화면에 보여 주지 않고 503 "메일 서버 미설정" 안내, 서버 시작 시 경고 (`email_verify.production_mode`) | `test_production_without_mail_server_refuses`, `test_production_with_mail_server_sends`, `test_local_dev_mode_still_shows_code` |
-| I-19 | 10일차 점검 | 중간 | 발표장·강의실처럼 같은 와이파이(같은 IP)를 쓰는 여러 사람이 접속하면 IP 기준 제한(로그인 실패 20회, 인증 메일 20회/시간)에 함께 걸려 모두 막힐 수 있음 | 제한 값이 코드에 고정 | `.env` 의 `LOGIN_MAX_FAILS`, `LOGIN_LOCK_MINUTES`, `LOGIN_IP_MAX_FAILS`, `EMAIL_SEND_LIMIT_PER_EMAIL`, `EMAIL_SEND_LIMIT_PER_IP` 로 조정 가능 (`rate_limit.env_int`) | `test_env_int` |
-| I-20 | 10일차 점검 | 낮음 | `/products/abc` 는 404 화면 대신 JSON 오류(422), `/products/99999999999999999999` 는 서버 오류(500) | 경로 값 검증 오류와 정수 범위 초과를 화면용으로 처리하지 않음 | 화면은 404 화면, API 는 `{code: NOT_FOUND}` 404 (API 의 형식 오류 응답은 그대로) | `test_bad_product_path_shows_404_page`, `test_bad_product_id_in_api` |
-| I-21 | 10일차 점검 | 낮음 | 중립 도입 후에도 분석 화면 차트 제목이 "긍정 / 부정 비율", 리뷰 목록 필터가 "긍정·부정 전체" | 문구 미갱신 | "긍정 / 중립 / 부정 비율", "감성 전체" | `test_three_way_sentiment_wording` |
-| I-22 | 10일차 점검 | 낮음 | 차트 툴팁·대체 표에 키워드 이름이 HTML 로 들어감 (셀러 본인 화면에만 영향) | 문자열을 그대로 HTML 에 삽입 | HTML 특수문자 이스케이프 (`_charts.html` 의 `esc`) | 코드 검토 |
-| I-23 | 10일차 점검 | 낮음 | 테스트를 돌릴 때마다 `SECRET_KEY` 경고가 출력됨, 문서의 테스트 수(298)가 실제와 다름 | 테스트용 키가 경고 목록의 값, favicon 테스트 추가 후 미갱신 | 테스트용 키 변경, `09_test_result.md`·`11_final_report.md` 갱신 | 테스트 출력에 경고 없음 |
+| I-08 | 7일차 점검 (2026-10-15) | 높음 | 이메일 인증 코드를 5번 넘게 시도할 수 있음 | 코드 정보와 틀린 횟수를 브라우저 쿠키에 저장 → 발급 직후 쿠키로 되돌리면 횟수가 초기화됨. `SECRET_KEY` 가 예시 값이면 쿠키 속 해시로 코드를 알아낼 수도 있음 | 코드 정보를 서버 메모리에만 저장, 쿠키에는 남기지 않음 (`email_verify.py`) | `test_security_limits.py::test_old_cookie_replay_cannot_reset_tries`, `test_code_not_stored_in_cookie` |
+| I-09 | 7일차 점검 | 높음 | 비밀번호 찾기 10분 잠금이 쿠키를 지우면 풀림 | 실패 횟수를 쿠키에 저장 | 이메일·IP 기준으로 서버에 기록 (`rate_limit.password_reset`) | `test_reset_lock_survives_cookie_clear` |
+| I-10 | 7일차 점검 | 높음 | 로그인 실패 횟수 제한이 없어 비밀번호를 계속 대입할 수 있음 (30회 실패 후에도 로그인됨) | 로그인 시도 제한 미구현 | 같은 이메일 5회·같은 IP 20회 실패 시 10분 잠금. 화면과 API 공통 (`rate_limit.py`) | `test_login_locks_after_five_failures`, `test_api_login_shares_lock` |
+| I-11 | 7일차 점검 | 높음 | REST API 회원가입은 이메일 인증 없이 가입됨 | 인증 확인을 화면 회원가입에만 넣음 | `POST /api/v1/auth/signup` 에 `email_code` 확인 추가 (`EMAIL_CODE_INVALID`) | `test_api_signup_requires_email_code` |
+| I-12 | 7일차 점검 | 중간 | 인증 메일을 무제한으로 요청할 수 있음 (메일 폭탄·코드 재발급 반복) | 재발송 60초 대기만 있고 총 횟수 제한 없음 | 이메일당 1시간 5회, IP당 1시간 20회 | `test_send_limit_per_email`, `test_send_limit_per_ip` |
+| I-13 | 7일차 점검 | 중간 | 3점 리뷰가 모두 '부정'으로 분류되어 중립이 0건, 부정 비율이 실제보다 높게 나옴 (데모 데이터 부정 비율 55% → 실제 27%) | 분석 규칙이 4점 이상만 긍정, 나머지는 모두 부정 | 위험 키워드 없는 3점 리뷰는 중립(NEU). 규칙 버전 `rule-v2`, 서버 시작 시 예전 결과 자동 재분석 | `test_unit.py`, `test_neutral_sentiment.py`, `test_api_stats.py::test_summary` |
+| I-14 | 7일차 점검 | 중간 | 서명 키(`SECRET_KEY`)를 예시 값 그대로 써도 아무 경고가 없음 | 시작 시 점검 없음 | 비었거나 예시 값이면 서버 시작 시 경고 문구 출력 | `test_secret_key_warning` |
+| I-15 | 7일차 점검 | 낮음 | 쓰지 않는 시안 `frontend/passwordreset_new.html` 이 저장소에 남아 있음 | 비밀번호 변경 화면을 Figma 기준 한 화면으로 바꾼 뒤 정리하지 않음 | 이번 커밋에서 `git rm frontend/passwordreset_new.html` 로 삭제 | 저장소 파일 목록 |
+| I-16 | 7일차 점검 | 낮음 | `backend/tests/__pycache__/*.pyc` 14개가 저장소에 올라가 있음 | `.gitignore` 에 `__pycache__/` 를 넣기 전에 커밋되어 계속 추적됨 | `git rm -r --cached backend/tests/__pycache__` 로 추적 해제 (파일은 PC 에 남음) | `git ls-files \| grep pyc` 결과 0건 |
+| I-17 | 7일차 2차 점검 (2026-10-15) | 중간 | 리뷰 CSV 내보내기에 엑셀 수식이 그대로 들어감. 본문이 `=HYPERLINK("http://...","클릭")` 이면 엑셀에서 열 때 링크·수식으로 동작 (CSV 수식 주입) | 고객이 쓴 리뷰 본문·작성자명을 그대로 CSV 칸에 씀 | `=`, `+`, `-`, `@` 로 시작하는 글자 칸 앞에 `'` 를 붙여 글자로 취급 (`api_v1.csv_safe`) | `test_review_fixes.py::test_review_export_neutralizes_formula`, `test_csv_safe` |
+| I-18 | 7일차 2차 점검 | 중간 | 메일 서버 없이 HTTPS 운영 설정(`COOKIE_SECURE=1`)으로 배포하면 인증 코드가 화면에 표시됨 → 공개 정보(이름·이메일·사업자 번호)만으로 남의 비밀번호 변경 가능, 가입 여부도 드러남 | `MAIL_HOST` 가 없으면 운영 여부와 관계없이 개발 모드로 동작 | 운영 설정에서는 코드를 화면에 보여 주지 않고 503 "메일 서버 미설정" 안내, 서버 시작 시 경고 (`email_verify.production_mode`) | `test_production_without_mail_server_refuses`, `test_production_with_mail_server_sends`, `test_local_dev_mode_still_shows_code` |
+| I-19 | 7일차 2차 점검 | 중간 | 발표장·강의실처럼 같은 와이파이(같은 IP)를 쓰는 여러 사람이 접속하면 IP 기준 제한(로그인 실패 20회, 인증 메일 20회/시간)에 함께 걸려 모두 막힐 수 있음 | 제한 값이 코드에 고정 | `.env` 의 `LOGIN_MAX_FAILS`, `LOGIN_LOCK_MINUTES`, `LOGIN_IP_MAX_FAILS`, `EMAIL_SEND_LIMIT_PER_EMAIL`, `EMAIL_SEND_LIMIT_PER_IP` 로 조정 가능 (`rate_limit.env_int`) | `test_env_int` |
+| I-20 | 7일차 2차 점검 | 낮음 | `/products/abc` 는 404 화면 대신 JSON 오류(422), `/products/99999999999999999999` 는 서버 오류(500) | 경로 값 검증 오류와 정수 범위 초과를 화면용으로 처리하지 않음 | 화면은 404 화면, API 는 `{code: NOT_FOUND}` 404 (API 의 형식 오류 응답은 그대로) | `test_bad_product_path_shows_404_page`, `test_bad_product_id_in_api` |
+| I-21 | 7일차 2차 점검 | 낮음 | 중립 도입 후에도 분석 화면 차트 제목이 "긍정 / 부정 비율", 리뷰 목록 필터가 "긍정·부정 전체" | 문구 미갱신 | "긍정 / 중립 / 부정 비율", "감성 전체" | `test_three_way_sentiment_wording` |
+| I-22 | 7일차 2차 점검 | 낮음 | 차트 툴팁·대체 표에 키워드 이름이 HTML 로 들어감 (셀러 본인 화면에만 영향) | 문자열을 그대로 HTML 에 삽입 | HTML 특수문자 이스케이프 (`_charts.html` 의 `esc`) | 코드 검토 |
+| I-23 | 7일차 2차 점검 | 낮음 | 테스트를 돌릴 때마다 `SECRET_KEY` 경고가 출력됨, 문서의 테스트 수(298)가 실제와 다름 | 테스트용 키가 경고 목록의 값, favicon 테스트 추가 후 미갱신 | 테스트용 키 변경, `09_test_result.md`·`11_final_report.md` 갱신 | 테스트 출력에 경고 없음 |
+| I-24 | 8일차 Agent Task (2026-10-16) | 중간 | CSV 업로드에서 평점 `4.5` 는 4점으로 잘려 저장, 미래 작성일(`2099-01-01`)도 저장, 255자 넘는 상품명은 잘려 저장되어 다시 올리면 같은 상품이 중복 생성될 수 있음, 아주 긴 본문은 MariaDB TEXT(65,535바이트) 한도를 넘을 수 있음 | 값 검증 없이 잘라서 저장 | 잘라 저장하지 않고 오류 행으로 안내 (`pipeline._row_problem`): "평점은 1~5 정수", "작성일이 미래", "상품명 255자 초과", "리뷰내용이 너무 김" — Agent Task T-8-1 (`11_final_report.md` 부록 A) | `test_agent_task_day8.py` |
+| I-25 | 8일차 정적 점검 | 낮음 | 쓰이지 않는 코드 `schemas.FeedbackCreate` | 의견 보내기를 화면 폼으로만 구현하면서 남음 | 삭제 (`09_test_result.md` 5장 정적 점검) | 전체 테스트 통과 |
 
 ## 남은 위험 (알고 있지만 이번 범위에서 두는 것)
 

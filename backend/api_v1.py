@@ -160,6 +160,23 @@ def _no_content() -> Response:
 
 
 # ══════════════════════════════════════════════
+# 0. 상태 확인 (로그인 불필요)
+# ══════════════════════════════════════════════
+@router.get("/health", tags=["상태 확인"])
+def health(db: DB):
+    """서버·DB 상태 확인 (로그인 불필요). 배포 후 '서비스 확인'과 모니터링에 사용
+
+    200 {"status": "ok", "database": "ok", "model_version": "rule-v2"} / DB 연결 실패 시 503
+    """
+    try:
+        db.execute(select(1))
+    except Exception:                               # DB 가 꺼졌거나 접속 정보가 틀림
+        return JSONResponse({"status": "error", "database": "error", "model_version": MODEL_VERSION},
+                            status_code=503)
+    return {"status": "ok", "database": "ok", "model_version": MODEL_VERSION}
+
+
+# ══════════════════════════════════════════════
 # 1. 인증·계정 (E1)
 # ══════════════════════════════════════════════
 @router.post("/auth/signup", status_code=201, response_model=S.UserOut, tags=["인증·계정"])

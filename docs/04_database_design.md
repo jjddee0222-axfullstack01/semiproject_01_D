@@ -1,10 +1,157 @@
-# DB 설계 (ERD)
+# 04. DB 설계 (ERD) — PIN POINT REVIEW
 
 <img width="6984" height="6090" alt="pinpoint_erd (1)" src="https://github.com/user-attachments/assets/e7ed755e-7458-46e5-b60b-b92c083d973c" />
 
 - DBMS: **MariaDB 10.5+**, 문자셋 `utf8mb4`, 엔진 InnoDB
 - 실제 정의: `backend/models.py` (SQLAlchemy ORM) · 같은 내용의 DDL: `backend/schema_mariadb.sql`
 - ID 는 모두 `BIGINT UNSIGNED AUTO_INCREMENT` (대리키). 월별 통계 2개만 복합 기본키
+
+## 0. ERD (텍스트 버전)
+
+위 그림과 같은 내용을 GitHub 에서 바로 보이는 Mermaid 로 옮겼습니다. `backend/models.py` 에서 **자동으로 뽑은 것**이라 실제 테이블·컬럼과 같습니다 (PK 기본키, FK 외래키, UK 고유).
+
+```mermaid
+erDiagram
+    ingest_logs {
+        bigint id PK
+        varchar batch_name
+        int total_count
+        int duplicate_count
+        int missing_count
+        datetime run_at
+    }
+    keywords {
+        bigint id PK
+        varchar word UK
+        enum polarity
+    }
+    users {
+        bigint id PK
+        varchar email UK
+        varchar password_hash
+        varchar name
+        varchar mall_name
+        enum mall_platform
+        char business_number UK
+        enum status
+        datetime created_at
+        datetime withdrawn_at
+    }
+    feedbacks {
+        bigint id PK
+        bigint user_id FK
+        text complaint
+        text suggestion
+        datetime created_at
+    }
+    products {
+        bigint id PK
+        bigint seller_id FK
+        varchar name
+        varchar category
+        text description
+        json description_embedding
+        datetime created_at
+    }
+    risk_keywords {
+        bigint id PK
+        bigint seller_id FK
+        varchar word
+        smallint weight
+        datetime created_at
+    }
+    sessions {
+        bigint id PK
+        bigint user_id FK
+        char session_token_hash UK
+        datetime created_at
+        datetime expires_at
+    }
+    shop_monthly_stats {
+        bigint seller_id PK,FK
+        date month PK
+        int visitors
+        int buyers
+    }
+    product_monthly_stats {
+        bigint product_id PK,FK
+        date month PK
+        int buyers
+    }
+    reviews {
+        bigint id PK
+        bigint product_id FK
+        varchar reviewer_name
+        smallint rating
+        text content_raw
+        text content_clean
+        json content_embedding
+        date reviewed_at
+        enum status
+        varchar blind_reason
+        bigint blinded_by FK
+        datetime blinded_at
+        datetime created_at
+    }
+    reply_suggestions {
+        bigint id PK
+        bigint review_id FK
+        text draft
+        varchar llm_model
+        datetime created_at
+    }
+    review_analysis {
+        bigint id PK
+        bigint review_id FK,UK
+        enum sentiment
+        float sentiment_score
+        smallint severity
+        enum issue_type
+        varchar model_version
+        datetime analyzed_at
+    }
+    review_blind_logs {
+        bigint id PK
+        bigint review_id FK
+        bigint actor_id FK
+        enum action
+        varchar reason
+        datetime created_at
+    }
+    review_keywords {
+        bigint review_id PK,FK
+        bigint keyword_id PK,FK
+        float score
+    }
+    review_replies {
+        bigint id PK
+        bigint review_id FK
+        bigint parent_id FK
+        bigint author_id FK
+        text content
+        datetime created_at
+        datetime updated_at
+    }
+    keywords ||--o{ review_keywords : "keyword_id"
+    products ||--o{ product_monthly_stats : "product_id"
+    products ||--o{ reviews : "product_id"
+    review_replies ||--o{ review_replies : "parent_id"
+    reviews ||--o{ reply_suggestions : "review_id"
+    reviews ||--o{ review_blind_logs : "review_id"
+    reviews ||--o{ review_keywords : "review_id"
+    reviews ||--o{ review_replies : "review_id"
+    reviews ||--o| review_analysis : "review_id"
+    users ||--o{ feedbacks : "user_id"
+    users ||--o{ products : "seller_id"
+    users ||--o{ review_blind_logs : "actor_id"
+    users ||--o{ review_replies : "author_id"
+    users ||--o{ reviews : "blinded_by"
+    users ||--o{ risk_keywords : "seller_id"
+    users ||--o{ sessions : "user_id"
+    users ||--o{ shop_monthly_stats : "seller_id"
+```
+
+**3일차 검증 질문에 대한 답:** 테이블 15개 · 각 테이블의 PK 는 아래 1장 · 관계는 2장 · Frontend 가 부르는 API 는 `03_ui_design.md` 5장 · Backend 가 돌려주는 데이터는 `05_api_spec.md` 응답 예시
 
 ## 1. 테이블 목록 (15개)
 

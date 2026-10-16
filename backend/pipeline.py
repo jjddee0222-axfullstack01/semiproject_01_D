@@ -61,11 +61,39 @@ def _parse_date(value: str) -> Optional[date]:
 
 
 def _parse_rating(value: str) -> Optional[int]:
+    """평점은 1~5 정수만. '5' · '5.0' 은 허용, '4.5' 처럼 소수점이 있으면 None (예전에는 4 로 잘라서 저장했음)"""
     try:
-        rating = int(float((value or "").strip()))
+        number = float((value or "").strip())
     except ValueError:
         return None
+    if not number.is_integer():
+        return None
+    rating = int(number)
     return rating if 1 <= rating <= 5 else None
+
+
+# DB 컬럼 크기 (models.py 와 같게): 넘으면 잘라서 저장하지 않고 오류 행으로 안내
+PRODUCT_NAME_MAX = 255                 # products.name VARCHAR(255)
+REVIEW_CONTENT_MAX_BYTES = 65_535      # reviews.content_raw TEXT (MariaDB TEXT 최대 65,535 바이트)
+
+
+def _row_problem(name: str, content: str, rating: Optional[int], reviewed_at: Optional[date]) -> Optional[str]:
+    """행 검증 → 문제가 있으면 사용자에게 보여 줄 이유, 없으면 None"""
+    if not name:
+        return "상품명 없음"
+    if len(name) > PRODUCT_NAME_MAX:
+        return f"상품명 {PRODUCT_NAME_MAX}자 초과"
+    if not content:
+        return "리뷰내용 없음"
+    if len(content.encode("utf-8")) > REVIEW_CONTENT_MAX_BYTES:
+        return "리뷰내용이 너무 김"
+    if rating is None:
+        return "평점은 1~5 정수"
+    if reviewed_at is None:
+        return "작성일 형식 오류"
+    if reviewed_at > date.today():
+        return "작성일이 미래"
+    return None
 
 
 def _normalize_header(name: Optional[str]) -> str:
@@ -120,8 +148,7 @@ def ingest_rows(db: Session, *, batch_name: str, rows: list[dict], seller: User)
         content = (row.get("content") or "").strip()
         rating = _parse_rating(row.get("rating"))
         reviewed_at = _parse_date(row.get("reviewed_at"))
-        reason = ("상품명 없음" if not name else "리뷰내용 없음" if not content
-                  else "평점은 1~5" if rating is None else "작성일 형식 오류" if reviewed_at is None else None)
+        reason = _row_problem(name, content, rating, reviewed_at)
         if reason:
             log.missing_count += 1
             problems.append(f"{line_no}행({reason})")
@@ -130,7 +157,7 @@ def ingest_rows(db: Session, *, batch_name: str, rows: list[dict], seller: User)
         reviewer = (row.get("reviewer_name") or "").strip()[:50] or None
         product = products.get(name)
         if product is None:
-            product = Product(seller=seller, name=name[:255],
+            product = Product(seller=seller, name=name,
                               category=(row.get("category") or "").strip()[:100] or None,
                               description=(row.get("product_description") or "").strip() or None)
             db.add(product)

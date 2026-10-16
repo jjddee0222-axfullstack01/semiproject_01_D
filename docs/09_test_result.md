@@ -53,7 +53,7 @@ cd backend && python -m pytest
 
 **7일차 2차 점검:** favicon 테스트 1개(팀 추가)와 점검 수정 테스트 23개를 더해 299개 → 322개. CSV 수식 주입, 운영 모드 인증 코드 노출 등은 고치기 전에 먼저 재현해 확인했습니다 (I-17~I-23).
 
-**8일차 Agent Task:** CSV 입력 검증 테스트 10개와 상태 확인 API 테스트 3개(`test_agent_task_day8.py`)를 더해 322개 → 335개. 기존 테스트 1건(`test_upload_reports_bad_rows`)은 오류 문구가 "평점은 1~5" → "평점은 1~5 정수"로 바뀌어 기대값만 고쳤습니다.
+**8일차 Agent Task:** CSV 입력 검증 테스트 10개와 상태 확인 API 테스트 3개(`test_agent_task_day8.py`)를 더해 322개 → 335개. 기존 테스트 1건(`test_upload_reports_bad_rows`)은 오류 문구가 "평점은 1\~5" → "평점은 1\~5 정수"로 바뀌어 기대값만 고쳤습니다.
 
 ## 3. 사용자 시나리오
 

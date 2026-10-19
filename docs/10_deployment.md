@@ -162,9 +162,3 @@ git checkout v1.0.0 && sudo systemctl restart pinpoint   # 문제가 생기면 �
 mariadb-dump -u root -p pinpoint > pinpoint_$(date +%Y%m%d).sql     # 매일 실행 권장 (cron)
 ```
 
-## 9. 발표 시연 팁
-
-- 시연 중 메일 서버가 불안정하면 **노트북 로컬 서버**(`COOKIE_SECURE=0`)에서 `MAIL_HOST` 를 비워 개발 모드로 실행하면 인증 코드가 화면에 바로 보입니다. 운영 서버(`COOKIE_SECURE=1`)에서는 보안상 화면에 코드를 보여 주지 않습니다.
-- 청중이 같은 와이파이로 동시에 접속하는 시연이면 `.env` 에 `LOGIN_IP_MAX_FAILS=100`, `EMAIL_SEND_LIMIT_PER_IP=100` 처럼 IP 기준 제한을 늘리고 서버를 다시 켭니다. 같은 와이파이는 바깥에서 모두 같은 IP 로 보이기 때문입니다.
-- 로그인을 연속으로 틀려 잠겼다면 서버를 재시작하면 풀립니다.
-- 데모 데이터는 DB 가 비어 있을 때만 자동으로 들어갑니다 (`demo@pinpoint.kr` / `Pinpoint1!`).

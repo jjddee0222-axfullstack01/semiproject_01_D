@@ -331,12 +331,17 @@
 
                 <div class="form-group">
                     <label for="new-pwd">변경할 비밀번호</label>
-                    <input type="password" id="new-pwd" name="new_password" placeholder="변경할 비밀번호를 입력하세요 (변경하지 않으려면 비워두세요)">
+                    <input type="password" id="new-pwd" name="new_password" maxlength="64" autocomplete="new-password" placeholder="변경할 비밀번호를 입력하세요 (변경하지 않으려면 비워두세요)">
+                </div>
+
+                <div class="form-group">
+                    <label for="new-pwd-confirm">변경할 비밀번호 확인</label>
+                    <input type="password" id="new-pwd-confirm" name="new_password_confirm" maxlength="64" autocomplete="new-password" placeholder="변경할 비밀번호를 한 번 더 입력하세요">
                 </div>
 
                 <div class="form-group">
                     <label for="mall-name">쇼핑몰 이름</label>
-                    <input type="text" id="mall-name" name="mall_name" value="{{ current_user.mall_name }}" required>
+                    <input type="text" id="mall-name" name="mall_name" value="{{ current_user.mall_name }}" maxlength="100" required>
                 </div>
 
                 <div class="form-group">

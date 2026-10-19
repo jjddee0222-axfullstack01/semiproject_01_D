@@ -117,29 +117,29 @@
         <form method="post" action="{{ url_for('signup') }}">
             <div class="input-group">
                 <label for="name">이름</label>
-                <input type="text" id="name" name="name" value="{{ form.name or '' }}" placeholder="이름을 입력해주세요." required>
+                <input type="text" id="name" name="name" value="{{ form.name or '' }}" placeholder="이름을 입력해주세요." maxlength="50" required>
             </div>
 
             <div class="input-group">
                 <label for="email">이메일</label>
-                <input type="email" id="email" name="email" value="{{ form.email or '' }}" placeholder="이메일을 입력해주세요." autocomplete="username" required>
+                <input type="email" id="email" name="email" value="{{ form.email or '' }}" placeholder="이메일을 입력해주세요." autocomplete="username" maxlength="255" required>
             </div>
 
             {% set code_purpose = 'signup' %}{% include '_email_code.html' %}
             
             <div class="input-group">
                 <label for="password">비밀번호</label>
-                <input type="password" id="password" name="password" placeholder="영어 대/소문자, 숫자, 특수문자 포함" required>
+                <input type="password" id="password" name="password" maxlength="64" placeholder="영어 대/소문자, 숫자, 특수문자 포함" required>
             </div>
 
             <div class="input-group">
                 <label for="password-confirm">비밀번호 확인</label>
-                <input type="password" id="password-confirm" name="password_confirm" placeholder="비밀번호를 다시 입력해주세요." required>
+                <input type="password" id="password-confirm" name="password_confirm" maxlength="64" placeholder="비밀번호를 다시 입력해주세요." required>
             </div>
 
             <div class="input-group">
                 <label for="mall-name">쇼핑몰 이름</label>
-                <input type="text" id="mall-name" name="mall_name" value="{{ form.mall_name or '' }}" placeholder="쇼핑몰 이름을 입력해주세요." required>
+                <input type="text" id="mall-name" name="mall_name" value="{{ form.mall_name or '' }}" placeholder="쇼핑몰 이름을 입력해주세요." maxlength="100" required>
             </div>
 
             <div class="input-group">

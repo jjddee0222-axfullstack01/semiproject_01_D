@@ -10,14 +10,14 @@
 | 구분 | 건수 | 상태 |
 |---|---|---|
 | 높음 | 6 | 모두 해결 |
-| 중간 | 10 | 모두 해결 |
-| 낮음 | 9 | 모두 해결 |
+| 중간 | 13 | 모두 해결 |
+| 낮음 | 11 | 모두 해결 |
 
 ## 이슈 목록
 
 | ID | 발견 시점 | 심각도 | 문제 | 원인 | 해결 | 확인 |
 |---|---|---|---|---|---|---|
-| I-01 | 6일차 점검 | 높음 | 공유 파일 `backend/setup_mariadb.sql` 에 실제 DB 비밀번호가 들어간 채 커밋됨 | 비밀 값과 공유 양식 파일의 구분이 없었음 | 예시 값(`여기에 비밀번호`)으로 바꾸고 실제 값은 `backend/.env` 에만 두도록 규칙화 (`README` 보안 규칙, `CLAUDE.md`), `.gitignore` 정리 (커밋 9814255, 2026-10-14) | 커밋 전 `git diff` 확인. **Git 기록에는 예전 값이 남아 있으므로 DB 비밀번호는 새 값으로 바꿔 사용** |
+| I-01 | 6일차 점검 | 높음 | 공유 파일 `backend/setup_mariadb.sql` 에 실제 DB 비밀번호가 들어간 채 커밋됨 | 비밀 값과 공유 양식 파일의 구분이 없었음 | 예시 값(`여기에_비밀번호`)으로 바꾸고 실제 값은 `backend/.env` 에만 두도록 규칙화 (`README` 보안 규칙, `CLAUDE.md`), `.gitignore` 정리 (커밋 9814255, 2026-10-14) | 커밋 전 `git diff` 확인. **Git 기록에는 예전 값이 남아 있으므로 DB 비밀번호는 새 값으로 바꿔 사용** |
 | I-02 | 6일차 점검 | 중간 | 차트 기간 필터가 오전 9시 전에는 하루 전 날짜로 조회됨 | JavaScript `toISOString()` 이 UTC 기준 날짜를 돌려줌 | 브라우저의 한국 시간 기준으로 날짜 문자열을 만들도록 수정 (`_charts.html` 의 `period()`) | 화면에서 '최근 7일' 선택 후 요청 날짜 확인 |
 | I-03 | 6일차 점검 | 낮음 | 상품 검색에 `%` 를 넣으면 모든 상품이 검색됨 | 검색어가 SQL LIKE 와일드카드로 해석됨 | `contains(q, autoescape=True)` 로 특수문자 이스케이프 | `test_pages_day6.py::test_product_search` |
 | I-04 | CSV 업로드 구현 (2026-10-14) | 높음 | 같은 업로드 안에서 같은 키워드가 두 번 나오면 저장 중 오류(UNIQUE 위반)로 업로드 전체 실패 | 세션 설정 `autoflush=False` 라 방금 만든 키워드가 DB 조회에 보이지 않아 같은 단어를 또 만듦 | 아직 저장 전인 키워드 객체(`db.new`)를 먼저 찾아 재사용 (`database._save_keywords`) | `test_pages_upload.py` |
@@ -42,6 +42,11 @@
 | I-23 | 7일차 2차 점검 | 낮음 | 테스트를 돌릴 때마다 `SECRET_KEY` 경고가 출력됨, 문서의 테스트 수(298)가 실제와 다름 | 테스트용 키가 경고 목록의 값, favicon 테스트 추가 후 미갱신 | 테스트용 키 변경, `09_test_result.md`·`11_final_report.md` 갱신 | 테스트 출력에 경고 없음 |
 | I-24 | 8일차 Agent Task (2026-10-16) | 중간 | CSV 업로드에서 평점 `4.5` 는 4점으로 잘려 저장, 미래 작성일(`2099-01-01`)도 저장, 255자 넘는 상품명은 잘려 저장되어 다시 올리면 같은 상품이 중복 생성될 수 있음, 아주 긴 본문은 MariaDB TEXT(65,535바이트) 한도를 넘을 수 있음 | 값 검증 없이 잘라서 저장 | 잘라 저장하지 않고 오류 행으로 안내 (`pipeline._row_problem`): "평점은 1~5 정수", "작성일이 미래", "상품명 255자 초과", "리뷰내용이 너무 김" — Agent Task T-8-1 (`11_final_report.md` 부록 A) | `test_agent_task_day8.py` |
 | I-25 | 8일차 정적 점검 | 낮음 | 쓰이지 않는 코드 `schemas.FeedbackCreate` | 의견 보내기를 화면 폼으로만 구현하면서 남음 | 삭제 (`09_test_result.md` 5장 정적 점검) | 전체 테스트 통과 |
+| I-26 | 9일차 통합 점검 (2026-10-19) | 중간 | 화면 회원가입에서 이름 51자·쇼핑몰 이름 101자·이메일 256자 이상, 설정 화면에서 쇼핑몰 이름 101자 이상을 넣으면 MariaDB 에서 저장 오류(500). 비밀번호 규칙도 화면은 "8자 이상", API 는 "8~64자"로 달랐음 | 화면 라우트가 DB 컬럼 크기를 검사하지 않음 (테스트는 SQLite 라 긴 값도 저장되어 드러나지 않음), 화면과 API 가 규칙을 따로 정의 | DB 컬럼 크기와 같은 길이 검사(`main.too_long`), 화면도 `schemas.py` 의 비밀번호·이메일 규칙을 그대로 사용, 입력칸 `maxlength` | `test_day9_fixes.py::test_signup_rejects_too_long`, `test_settings_rejects_too_long_mall_name`, `test_screen_password_rule_matches_api` |
+| I-27 | 9일차 통합 점검 | 중간 | 설정 화면이나 `PATCH /api/v1/users/me/password` 로 비밀번호를 바꿔도 다른 기기의 로그인이 최대 7일간 유지됨 (비밀번호 찾기는 모든 기기 로그아웃) | 비밀번호 변경 경로마다 세션 처리 규칙이 달랐음 | 지금 쓰는 세션만 남기고 나머지 삭제 (`auth.end_other_sessions`), 화면·API 공통 | `test_settings_password_change_ends_other_sessions`, `test_api_password_change_ends_other_sessions` |
+| I-28 | 9일차 통합 점검 | 낮음 | 설정 화면에 '비밀번호 확인' 칸이 없어 오타가 나면 그대로 그 비밀번호로 바뀜 | 확인 입력 없음 | '변경할 비밀번호 확인' 칸 추가, 두 값이 다르면 저장하지 않음 | `test_settings_password_confirm_mismatch` |
+| I-29 | 9일차 통합 점검 | 중간 | CS챗봇에서 '처리 완료'를 두 번 누르거나 뒤로 가기 후 다시 제출하면 같은 답글이 중복 저장됨 | 이미 답글이 있는지 확인하지 않음 | 이미 답글이 있는 리뷰면 "이미 처리 완료된 리뷰입니다" 안내 후 저장하지 않음 | `test_cschatbot_done_twice_saves_once` |
+| I-30 | 9일차 통합 점검 | 낮음 | 사이드바 로그아웃이 GET 링크라서, 다른 사이트가 `<img src=".../logout">` 같은 방법으로 사용자를 몰래 로그아웃시킬 수 있음 | 상태를 바꾸는 동작을 GET 으로 허용 | 로그아웃은 POST 로만 (사이드바는 폼 버튼). `GET /logout` 은 로그아웃하지 않고 대시보드(비로그인이면 로그인 화면)로 이동 | `test_get_logout_does_not_log_out`, `test_post_logout_logs_out`, `test_sidebar_logout_is_post_form` |
 
 ## 남은 위험 (알고 있지만 이번 범위에서 두는 것)
 

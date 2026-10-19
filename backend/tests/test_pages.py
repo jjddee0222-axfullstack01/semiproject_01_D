@@ -102,9 +102,9 @@ def test_settings_update(page, session):
     assert r.status_code == 401 and "현재 비밀번호" in r.text
     r = page.post("/settings", data={"current_password": DEMO_PASSWORD, "mall_name": "새이름몰",
                                      "mall_platform": "COUPANG", "business_number": "123-45-67890",
-                                     "new_password": "Newpass1!"})
+                                     "new_password": "Newpass1!", "new_password_confirm": "Newpass1!"})
     assert "저장되었습니다" in r.text and 'value="COUPANG" selected' in r.text
-    page.get("/logout")
+    page.post("/logout")
     assert "새이름몰 대시보드" in page.post("/login", data={"email": DEMO_EMAIL, "password": "Newpass1!"}).text
 
 
@@ -151,7 +151,7 @@ def test_feedback(page, session):
 
 def test_logout_invalidates_old_cookie(page):
     old_token = page.cookies.get("session_id")
-    assert "로그아웃되었습니다" in page.get("/logout").text
+    assert "로그아웃되었습니다" in page.post("/logout").text
     page.cookies.set("session_id", old_token)
     r = page.get("/dashboard")
     assert r.url.path == "/login"

@@ -52,6 +52,7 @@ python -m pytest                                # 전체 실행 (또는 run_test
 | `test_security_limits.py` | 인증 코드 쿠키 재사용 차단, 발송 횟수 제한, 로그인·비밀번호 찾기 잠금, API 회원가입 인증, SECRET_KEY 점검 |
 | `test_review_fixes.py` | 7일차 2차 점검: CSV 수식 주입 방지, 운영 모드 인증 코드 비노출, 제한 값 설정, 잘못된 주소 404, 3분류 문구 |
 | `test_agent_task_day8.py` | 8일차 Agent Task: CSV 업로드 입력 검증(정수 평점·미래 날짜·길이), 상태 확인 API `/api/v1/health` |
+| `test_day9_fixes.py` | 9일차 통합 점검: 입력 길이·비밀번호 규칙 통일, 비밀번호 변경 시 다른 기기 로그아웃, 설정 비밀번호 확인, CS챗봇 중복 방지, 로그아웃 POST 전용 |
 
 보안 테스트는 시도 기록(서버 메모리)을 테스트마다 비웁니다 (`conftest.py` 의 `fresh_db`).
 테스트 계획과 결과는 [docs/07_test_plan.md](../../docs/07_test_plan.md), [docs/09_test_result.md](../../docs/09_test_result.md) 에 있습니다.

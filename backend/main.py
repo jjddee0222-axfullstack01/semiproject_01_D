@@ -33,7 +33,7 @@ from starlette.middleware.sessions import SessionMiddleware
 try:
     from .analysis import RISK_SEVERITY, shop_report, summarize_reviews
     from .api_v1 import setup_api
-    from .auth import (LoginRequired, clear_cookie, delete_account, end_all_sessions, end_session,
+    from .auth import (LoginRequired, clear_cookie, delete_account, end_all_sessions, end_other_sessions, end_session,
                        get_current_user, login_required, start_session)
     from . import rate_limit
     from .email_verify import (PURPOSES, MailUnavailable, check_code, issue_code, mail_config_warning,
@@ -46,12 +46,12 @@ try:
                          UserStatus, visible_reviews)
     from .pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
     from .reply_drafts import generate_reply_draft
-    from .schemas import ReviewCreate, ReviewCreateResult
+    from .schemas import EMAIL_PATTERN, PASSWORD_MESSAGE, PASSWORD_PATTERN, ReviewCreate, ReviewCreateResult
     from .security import hash_password, verify_password
 except ImportError:
     from analysis import RISK_SEVERITY, shop_report, summarize_reviews
     from api_v1 import setup_api
-    from auth import (LoginRequired, clear_cookie, delete_account, end_all_sessions, end_session,
+    from auth import (LoginRequired, clear_cookie, delete_account, end_all_sessions, end_other_sessions, end_session,
                       get_current_user, login_required, start_session)
     import rate_limit
     from email_verify import (PURPOSES, MailUnavailable, check_code, issue_code, mail_config_warning,
@@ -64,7 +64,7 @@ except ImportError:
                         UserStatus, visible_reviews)
     from pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
     from reply_drafts import generate_reply_draft
-    from schemas import ReviewCreate, ReviewCreateResult
+    from schemas import EMAIL_PATTERN, PASSWORD_MESSAGE, PASSWORD_PATTERN, ReviewCreate, ReviewCreateResult
     from security import hash_password, verify_password
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -91,9 +91,20 @@ app.add_middleware(SessionMiddleware, session_cookie="pp_flash",
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # ── 입력 규칙
-PASSWORD_RULE = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$")
-EMAIL_RULE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-PASSWORD_RULE_MSG = "비밀번호는 8자 이상이며 영어 대/소문자, 숫자, 특수문자를 모두 포함해야 합니다."
+#    화면과 REST API 가 같은 규칙을 쓰도록 schemas.py 의 정의를 그대로 사용 (예전에는 화면만 '8자 이상', API 는 '8~64자')
+PASSWORD_RULE = PASSWORD_PATTERN
+EMAIL_RULE = EMAIL_PATTERN
+PASSWORD_RULE_MSG = PASSWORD_MESSAGE
+#    DB 컬럼 크기 (models.py 와 같게). 넘는 값을 그대로 저장하면 MariaDB 에서 오류(500)가 나므로 먼저 막는다
+FIELD_MAX = {"name": ("이름", 50), "email": ("이메일", 255), "mall_name": ("쇼핑몰 이름", 100)}
+
+
+def too_long(form: dict) -> Optional[str]:
+    """form 값 중 DB 컬럼 길이를 넘는 것이 있으면 안내 문구, 없으면 None"""
+    for key, (label, limit) in FIELD_MAX.items():
+        if key in form and len(form[key]) > limit:
+            return f"{label}은(는) {limit}자 이하로 입력해 주세요."
+    return None
 
 
 def normalize_business_number(value: str) -> Optional[str]:
@@ -352,6 +363,8 @@ def signup(request: Request,
     error, status = None, 400
     if not all(form.values()) or not password:
         error = "모든 항목을 입력해주세요."
+    elif length_error := too_long(form):
+        error = length_error
     elif not EMAIL_RULE.match(form["email"]):
         error = "이메일 형식이 올바르지 않습니다."
     elif not PASSWORD_RULE.match(password):
@@ -384,8 +397,13 @@ def signup(request: Request,
     return redirect(request, "login")
 
 
-@app.get("/logout", name="logout")
-@app.post("/logout")
+@app.get("/logout")
+def logout_get(request: Request, user=Depends(get_current_user)):
+    """GET 으로는 로그아웃하지 않음 (다른 사이트가 <img src=".../logout"> 등으로 몰래 로그아웃시키는 것 방지)"""
+    return redirect(request, "dashboard" if user else "login")
+
+
+@app.post("/logout", name="logout")
 def logout(request: Request, db: Session = Depends(get_session)):
     response = redirect(request, "login")
     end_session(db, request, response)
@@ -990,6 +1008,8 @@ def cschatbot_done(request: Request,
         error = "리뷰를 찾을 수 없습니다."
     elif review.status == ReviewStatus.BLINDED:
         error = "블라인드된 리뷰는 처리할 수 없습니다."
+    elif review.replies:                          # 두 번 누르기·뒤로 가기 후 다시 제출 → 답글 중복 방지
+        error = "이미 처리 완료된 리뷰입니다."
     elif not content:
         error = "답글 내용을 입력해 주세요."
     elif len(content) > REPLY_MAX_LENGTH:
@@ -1067,6 +1087,7 @@ def settings_page(request: Request,
 def settings(request: Request,
              current_password: str = Form(""),
              new_password: str = Form(""),
+             new_password_confirm: str = Form(""),
              mall_name: str = Form(""),
              mall_platform: str = Form(""),
              business_number: str = Form(""),
@@ -1081,6 +1102,8 @@ def settings(request: Request,
         error, status = "현재 비밀번호가 올바르지 않습니다.", 401
     elif not mall_name:
         error = "쇼핑몰 이름을 입력해주세요."
+    elif length_error := too_long({"mall_name": mall_name}):
+        error = length_error
     elif platform is None:
         error = "쇼핑몰 플랫폼을 선택해주세요."
     elif biz is None:
@@ -1089,6 +1112,8 @@ def settings(request: Request,
         error, status = "이미 다른 계정에 등록된 사업자번호입니다.", 409
     elif new_password and not PASSWORD_RULE.match(new_password):
         error = "변경할 " + PASSWORD_RULE_MSG
+    elif new_password and new_password != new_password_confirm:
+        error = "변경할 비밀번호와 비밀번호 확인이 일치하지 않습니다."
 
     if error:
         flash(request, error, "error")
@@ -1097,8 +1122,9 @@ def settings(request: Request,
     user.mall_name, user.mall_platform, user.business_number = mall_name, platform, biz
     if new_password:
         user.password_hash = hash_password(new_password)
+        end_other_sessions(db, user, request)      # 다른 기기에 남은 로그인은 끊고 지금 화면만 유지
     db.commit()
-    flash(request, "회원정보가 저장되었습니다.")
+    flash(request, "회원정보가 저장되었습니다." + (" 다른 기기의 로그인은 모두 종료했습니다." if new_password else ""))
     return redirect(request, "settings")
 
 

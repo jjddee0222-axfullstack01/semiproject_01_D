@@ -114,7 +114,7 @@ def test_login_lock_expires_and_success_resets(client, monkeypatch):
     for _ in range(4):
         wrong_login(client)
     assert "대시보드" in client.post("/login", data={"email": DEMO_EMAIL, "password": DEMO_PASSWORD}).text
-    client.get("/logout")
+    client.post("/logout")
     assert "1번 더" not in wrong_login(client).text            # 성공하면 실패 횟수 초기화
     for _ in range(4):
         wrong_login(client)

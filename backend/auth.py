@@ -80,6 +80,18 @@ def end_all_sessions(db: Session, user: User) -> None:
     db.execute(delete(UserSession).where(UserSession.user_id == user.id))
 
 
+def end_other_sessions(db: Session, user: User, request: Request) -> None:
+    """비밀번호를 바꾼 뒤 지금 쓰는 세션만 남기고 다른 기기의 로그인을 모두 끊음 (commit 은 호출한 쪽에서)
+
+    비밀번호 찾기(end_all_sessions)와 같은 원칙: 비밀번호가 바뀌면 예전 비밀번호로 연 세션은 쓸 수 없어야 함
+    """
+    token = request.cookies.get(SESSION_COOKIE)
+    stmt = delete(UserSession).where(UserSession.user_id == user.id)
+    if token:
+        stmt = stmt.where(UserSession.session_token_hash != hash_session_token(token))
+    db.execute(stmt)
+
+
 def delete_account(db: Session, user: User) -> None:
     """회원 탈퇴 (US-04, D5) — 하드 삭제. users 행을 지우고 나머지는 DB 외래키 규칙에 맡긴다 (commit 은 호출한 쪽에서)
 

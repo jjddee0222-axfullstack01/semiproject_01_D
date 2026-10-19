@@ -21,9 +21,9 @@
 
 ## 2. 배포 전 확인 (Final Code → Test → Git)
 
-- [ ] `cd backend && python -m pytest` 전부 통과 (`09_test_result.md` 기록)
-- [ ] `git status` 깨끗함, 공유 파일(`setup_mariadb.sql`, `.env.example`)에 실제 비밀번호 없음
-- [ ] 쓰지 않는 파일 정리 (`frontend/passwordreset_new.html` 등)
+- [x] `cd backend && python -m pytest` 전부 통과 (`09_test_result.md` 기록, 2026-10-19 347개 통과)
+- [x] 공유 파일(`setup_mariadb.sql`, `.env.example`)에 실제 비밀번호 없음 (GitHub 기준 확인, 예시 값은 `여기에_비밀번호` 로 통일) · 커밋 전 `git status` 확인은 각자
+- [x] 쓰지 않는 파일 정리 (`frontend/passwordreset_new.html`, 추적되던 `.pyc`, 쓰이지 않는 `FeedbackCreate` 삭제)
 - [ ] 최종 커밋과 태그
   ```bash
   git commit -m "release: v1.0 프로젝트 최종 버전"
@@ -48,7 +48,7 @@ python3 -m venv venv
 venv/bin/pip install -r backend/requirements.txt
 
 # 4) DB 계정·DB 만들기
-#    setup_mariadb.sql 을 복사해서 '여기에 비밀번호' 를 새 비밀번호로 바꾼 뒤 실행 (원본 파일은 고치지 않음)
+#    setup_mariadb.sql 을 복사해서 '여기에_비밀번호' 를 새 비밀번호로 바꾼 뒤 실행 (원본 파일은 고치지 않음)
 cp backend/setup_mariadb.sql /tmp/setup.sql && nano /tmp/setup.sql
 sudo mariadb < /tmp/setup.sql && rm /tmp/setup.sql
 ```

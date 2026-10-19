@@ -78,10 +78,10 @@ Figma 프레임 13개 중 11개는 기존 화면, 2개(비밀번호 변경하기
 | 쇼핑몰 분석 | `GET /analysis` | - | `GET /api/v1/stats/monthly-trend` · `/stats/sentiment-ratio` · `/stats/keywords/top` (차트 4개) · `GET /api/v1/exports/stats.csv` · `/exports/reviews.csv` (내려받기 링크) |
 | 상품 비교 | `GET /compare?a=&b=` | - | - |
 | CS챗봇 | `GET /cschatbot` | `POST /cschatbot/done` (처리 완료) · `POST /cschatbot/undo/{reply_id}` (되돌리기) | - |
-| 설정 | `GET /settings` | `POST /settings` · `POST /settings/risk-keywords` · `POST /settings/risk-keywords/{id}/delete` · `POST /settings/reanalyze` · `POST /withdraw` | - |
+| 설정 | `GET /settings` | `POST /settings` (비밀번호 변경 시 '확인' 칸 필수, 다른 기기 로그인 종료) · `POST /settings/risk-keywords` · `POST /settings/risk-keywords/{id}/delete` · `POST /settings/reanalyze` · `POST /withdraw` | - |
 | 회원 탈퇴 완료 | `GET /withdrawn` | - | - |
 | 의견 보내기 | `GET /feedback` | `POST /feedback` | - |
-| 공통 (사이드바) | - | `GET·POST /logout` | - |
+| 공통 (사이드바) | - | `POST /logout` (로그아웃 버튼. `GET /logout` 은 로그아웃하지 않고 대시보드로 이동) | - |
 
 화면 라우트와 REST API 는 같은 세션 쿠키(`session_id`)를 쓰므로, fetch 호출에도 로그인 정보가 자동으로 함께 갑니다. 같은 기능을 외부 프로그램에서 쓰려면 REST API(`/api/v1`, [05_api_spec.md](05_api_spec.md))를 사용합니다.
 

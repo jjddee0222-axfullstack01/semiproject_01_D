@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session, selectinload
 
 try:
     from .analysis import MODEL_VERSION, RISK_SEVERITY
-    from .auth import clear_cookie, delete_account, end_session, login_required, start_session
+    from .auth import clear_cookie, delete_account, end_other_sessions, end_session, login_required, start_session
     from . import rate_limit
     from .email_verify import check_code
     from .database import add_default_risk_keywords, analyze_and_save, reanalyze_seller_reviews, seller_risk_keywords
@@ -38,7 +38,7 @@ try:
     from .security import hash_password, verify_password
 except ImportError:
     from analysis import MODEL_VERSION, RISK_SEVERITY
-    from auth import clear_cookie, delete_account, end_session, login_required, start_session
+    from auth import clear_cookie, delete_account, end_other_sessions, end_session, login_required, start_session
     import rate_limit
     from email_verify import check_code
     from database import add_default_risk_keywords, analyze_and_save, reanalyze_seller_reviews, seller_risk_keywords
@@ -239,10 +239,12 @@ def update_me(body: S.UserUpdate, user: CurrentUser, db: DB):
 
 
 @router.patch("/users/me/password", status_code=204, tags=["인증·계정"])
-def change_password(body: S.PasswordChangeRequest, user: CurrentUser, db: DB):
+def change_password(body: S.PasswordChangeRequest, request: Request, user: CurrentUser, db: DB):
+    """비밀번호 변경 → 지금 쓰는 세션만 남기고 다른 기기의 로그인은 모두 종료 (설정 화면과 같은 규칙)"""
     if not verify_password(body.current_password, user.password_hash):
         raise ApiError(401, "INVALID_PASSWORD", "현재 비밀번호가 올바르지 않습니다.")
     user.password_hash = hash_password(body.new_password)
+    end_other_sessions(db, user, request)
     db.commit()
     return _no_content()
 

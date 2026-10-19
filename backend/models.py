@@ -437,5 +437,5 @@ class Feedback(Base):
     id: Mapped[int] = mapped_column(ID, primary_key=True, autoincrement=True)
     user_id: Mapped[Optional[int]] = mapped_column(ID, ForeignKey("users.id", ondelete="SET NULL"))
     complaint: Mapped[str] = mapped_column(Text, nullable=False)                          # 불편 사항
-    suggestion: Mapped[str] = mapped_column(Text, nullable=False)                         # 뭐시기 사항
+    suggestion: Mapped[str] = mapped_column(Text, nullable=False)                         # 기타 제안 사항
     created_at: Mapped[datetime] = _now()

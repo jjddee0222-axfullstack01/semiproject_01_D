@@ -96,12 +96,12 @@
 | 기준 | 확인 방법 | 결과 |
 |---|---|---|
 | 프로그램 실행 가능 | Railway 서비스 상태 Active, `https://도메인/api/v1/health` → `{"status":"ok","database":"ok",...}` | 통과 (2026-10-20, `{"status":"ok","database":"ok","model_version":"rule-v2"}`) |
-| 핵심 기능 정상 | `07_test_plan.md` 시나리오 S-01\~S-12 를 배포 주소에서 실행 (이메일 인증 단계는 `EMAIL_VERIFICATION=0` 으로 생략) | |
+| 핵심 기능 정상 | `07_test_plan.md` 시나리오 S-01\~S-12 를 배포 주소에서 실행 (이메일 인증 단계는 `EMAIL_VERIFICATION=0` 으로 생략) | 통과 (12개 중 12개, 2026-10-20) |
 | DB 연결 정상 | `/api/v1/health` 의 `"database": "ok"` (DB 가 꺼져 있으면 503), 배포 로그의 `[PIN POINT] DB: mariadb+pymysql://...` | 통과 (health `database: ok`, 로그 `@mariadb.railway.internal:3306`) |
-| Frontend·Backend 연결 정상 | 쇼핑몰 분석 화면 차트 표시 (`/api/v1/stats/*` 호출 성공) | |
-| 오류 처리 가능 | 없는 주소 → 404 화면, 남의 상품 → 404, 로그인 5회 실패 → 잠금 안내 | |
-| 시간대 | 오늘 날짜 리뷰가 든 CSV 업로드가 '작성일이 미래' 없이 추가됨 | |
-| 모바일 | 휴대폰(LTE)으로 배포 주소 접속, 메뉴·차트 표시 | |
+| Frontend·Backend 연결 정상 | 쇼핑몰 분석 화면 차트 표시 (`/api/v1/stats/*` 호출 성공) | 통과 (월별 추이·감성 비율·키워드 TOP 10 차트 표시) |
+| 오류 처리 가능 | 없는 주소 → 404 화면, 남의 상품 → 404, 로그인 5회 실패 → 잠금 안내 | 통과 |
+| 시간대 | 오늘 날짜 리뷰가 든 CSV 업로드가 '작성일이 미래' 없이 추가됨 | 통과 (`TZ=Asia/Seoul`) |
+| 모바일 | 휴대폰(LTE)으로 배포 주소 접속, 메뉴·차트 표시 | 통과 |
 | README 존재 | 저장소 최상위 `README.md` | 있음 (배포 주소 추가) |
 | Git History 존재 | `git log`, `v1.0.0` 태그 | |
 | 발표 Demo 가능 | 시연용 계정으로 시나리오 진행 | |

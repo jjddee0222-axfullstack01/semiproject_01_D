@@ -121,8 +121,8 @@ FastAPI 한 서버가 Jinja2 화면과 REST API(`/api/v1`)를 함께 제공하�
 | Done Criteria | 1) 평점은 1\~5 **정수**만 (`5.0` 허용, `4.5` 거부) 2) 작성일이 오늘 이후면 거부 3) 상품명 255자·본문 65,535바이트 초과는 잘라 저장하지 않고 오류 행으로 안내 4) `GET /api/v1/health` 가 로그인 없이 `{status, database, model_version}` 반환, DB 오류 시 503 5) 테스트 추가 6) 기존 URL 변경 없음 |
 | Test | 잘못된 행 4종이 행 번호·이유와 함께 건너뛰어지고 정상 행만 추가되는지, 오늘 날짜·`5.0` 은 통과하는지, health 정상·DB 오류 응답, 전체 pytest |
 | 결과 (Agent 보고) | 변경 파일: `backend/pipeline.py`(`_parse_rating`, `_row_problem`), `backend/api_v1.py`(`/health`), `templates/products.html`(안내 문구), `tests/test_agent_task_day8.py`(새 테스트 13개), `tests/test_pages_upload.py`(오류 문구 기대값 1곳) · 전체 335개 통과 · 기존 기능 영향: 오류 문구 "평점은 1\~5" → "평점은 1\~5 정수" 외 없음 |
-| 사람 리뷰 | (팀원 작성) 확인자: ______ · PR: ______ · 의견: ______ |
-| 커밋 | `feat: AI agent를 이용한 CSV 업로드 입력 검증 개선` |
+| 사람 리뷰 | 확인자: 정다은 · PR: 없음 (`main` 에 직접 커밋, 커밋 `02981fc`) · 의견: 완료조건 1\~6 충족 확인 (소수 평점·미래 날짜·긴 상품명 거부, `/api/v1/health` 응답). 같은 종류의 문제가 회원가입·설정 화면 입력 길이에도 남아 있어 9일차 점검 항목으로 넘김 → I-26 에서 수정 |
+| 커밋 | `02981fc` (`docs: update test plan, issue log, and test results for 7th to 10th days; add agent task details` 에 코드 변경 포함) |
 
 ### T-9-1. 9일차 통합 점검 수정 (9일차, 2026-10-19)
 

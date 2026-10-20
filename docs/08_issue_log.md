@@ -10,7 +10,7 @@
 | 구분 | 건수 | 상태 |
 |---|---|---|
 | 높음 | 6 | 모두 해결 |
-| 중간 | 13 | 모두 해결 |
+| 중간 | 15 | 모두 해결 |
 | 낮음 | 11 | 모두 해결 |
 
 ## 이슈 목록
@@ -47,6 +47,8 @@
 | I-28 | 9일차 통합 점검 | 낮음 | 설정 화면에 '비밀번호 확인' 칸이 없어 오타가 나면 그대로 그 비밀번호로 바뀜 | 확인 입력 없음 | '변경할 비밀번호 확인' 칸 추가, 두 값이 다르면 저장하지 않음 | `test_settings_password_confirm_mismatch` |
 | I-29 | 9일차 통합 점검 | 중간 | CS챗봇에서 '처리 완료'를 두 번 누르거나 뒤로 가기 후 다시 제출하면 같은 답글이 중복 저장됨 | 이미 답글이 있는지 확인하지 않음 | 이미 답글이 있는 리뷰면 "이미 처리 완료된 리뷰입니다" 안내 후 저장하지 않음 | `test_cschatbot_done_twice_saves_once` |
 | I-30 | 9일차 통합 점검 | 낮음 | 사이드바 로그아웃이 GET 링크라서, 다른 사이트가 `<img src=".../logout">` 같은 방법으로 사용자를 몰래 로그아웃시킬 수 있음 | 상태를 바꾸는 동작을 GET 으로 허용 | 로그아웃은 POST 로만 (사이드바는 폼 버튼). `GET /logout` 은 로그아웃하지 않고 대시보드(비로그인이면 로그인 화면)로 이동 | `test_get_logout_does_not_log_out`, `test_post_logout_logs_out`, `test_sidebar_logout_is_post_form` |
+| I-31 | 10일차 배포 (2026-10-20) | 중간 | Railway 첫 배포에서 서버가 `uvicorn: command not found` 로 시작되지 않음 | `requirements.txt` 가 저장소 최상위가 아니라 `backend/` 안에 있어, 빌드 단계에서 패키지 설치가 건너뛰어짐 | 웹 서비스 Settings 의 Root Directory 를 `backend` 로 지정 (`10_deployment.md` 5장) | 빌드 로그에 패키지 설치 기록, 서버 시작 로그 `Application startup complete` |
+| I-32 | 10일차 배포 | 중간 | 서버 시작 시 `[DB 연결 실패] ... @:3306` — DB 주소의 호스트가 비어 `localhost` 로 접속을 시도함 | `DATABASE_URL` 의 `${{MariaDB.RAILWAY_PRIVATE_DOMAIN}}` 참조가 서비스 이름과 맞지 않아 빈 값으로 바뀜 | MariaDB 서비스의 Private Networking 주소(`mariadb.railway.internal`)를 직접 입력 (`10_deployment.md` 4장) | 시작 로그 `[PIN POINT] DB: mariadb+pymysql://pinpoint:***@mariadb.railway.internal:3306/...`, `/api/v1/health` → `database: ok` |
 
 ## 남은 위험 (알고 있지만 이번 범위에서 두는 것)
 

@@ -6,10 +6,11 @@ AI 에이전트(Claude Code 등)에게 작업을 맡길 때 이 파일을 먼저
 - 쇼핑몰 셀러용 리뷰 분석 대시보드. 기획·요구사항은 `docs/01~02`, 설계는 `docs/03~06`
 - 실제 서버는 `backend/`. `frontend/` 는 디자인 시안이며 서버에서 쓰지 않음 (화면 수정은 `backend/templates/`)
 
-## 현재 개발 상태 (9일차, 2026-10-19)
-- 기능 요구사항 FR-01~27, 비기능 NFR-01~11 구현 완료. 자동 테스트 347개 통과 (`docs/09_test_result.md`)
-- 9일차 통합 점검 수정 I-26~I-30 반영 (입력 길이, 비밀번호 변경 시 다른 기기 로그아웃, CS챗봇 중복 방지, 로그아웃 POST 전용)
-- 남은 일: 실제 MariaDB 에서 전체 테스트, 배포(`docs/10_deployment.md`), 발표·회고(`docs/11_final_report.md`)
+## 현재 개발 상태 (10일차, 2026-10-20)
+- 기능 요구사항 FR-01\~27, 비기능 NFR-01\~11 구현 완료. 자동 테스트 347개 통과 (`docs/09_test_result.md`)
+- 9일차 통합 점검 수정 I-26\~I-30 반영 (입력 길이, 비밀번호 변경 시 다른 기기 로그아웃, CS챗봇 중복 방지, 로그아웃 POST 전용)
+- 배포 완료: https://semiproject01d-production.up.railway.app — Railway 웹 서비스(Root Directory `backend`) + MariaDB 11 컨테이너. 설정값은 `docs/10_deployment.md`
+- 남은 일: 실제 MariaDB 에서 전체 pytest, 발표·회고(`docs/11_final_report.md`), `v1.0.0` 태그
 - 분석은 규칙 기반(`analysis.py`, `rule-v2`). LLM·모델 학습은 이번 범위 제외
 
 ## 폴더 구조

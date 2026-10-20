@@ -31,7 +31,7 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 | API 서버 | FastAPI, Pydantic v2, SQLAlchemy 2.0 | 인증·인가, 리뷰·답글·통계 API, 입력 검증. 테이블은 서버 시작 시 자동 생성 (Alembic 마이그레이션은 미사용) |
 | 데이터베이스 | MariaDB 10.5+ (utf8mb4), 임베딩은 JSON 컬럼 | 15개 테이블 (`04_database_design.md`) |
 | 데이터·AI 파이프라인 | 규칙 기반 분석 (`analysis.py`, `rule-v2`) | 적재, 정제, 감성·위험도·이슈유형·키워드 라벨링. 감성 모델·LLM 은 `analyze_review()` 교체로 도입 예정 |
-| 실행 환경 | 로컬 (uvicorn, 프로세스 1개) | 배포 절차는 `10_deployment.md`. 시도 제한 기록이 서버 메모리에 있으므로 `--workers` 는 1 로 실행 |
+| 실행 환경 | 로컬 (uvicorn, 프로세스 1개) / 배포: Railway 웹 서비스(uvicorn 1개) + MariaDB 11 컨테이너 | 배포 절차는 `10_deployment.md`. 시도 제한 기록이 서버 메모리에 있으므로 `--workers` 는 1 로 실행 |
 
 ## 3. 핵심 설계 결정
 

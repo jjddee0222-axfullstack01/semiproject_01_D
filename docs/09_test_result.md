@@ -17,7 +17,8 @@
 | 사용자 시나리오 | **12개 중 12개 통과** (S-01 \~ S-12, 9일차 코드로 다시 실행. S-01 로그아웃은 사이드바 버튼(POST)으로) |
 | Must 기능(FR-01\~08) 정상 동작률 | **100%** |
 | MariaDB 호환 | 테스트 중 실행된 SQL 33,657건을 MariaDB 방언으로 생성 → 오류 0건 |
-| 발견·해결한 문제 | 30건 (높음 6, 중간 13, 낮음 11) — 모두 해결 |
+| 발견·해결한 문제 | 32건 (높음 6, 중간 15, 낮음 11) — 모두 해결 |
+| 배포 환경 | Railway + MariaDB 11 에서 서버 시작·DB 연결 확인 (2026-10-20, 6장) |
 | 정적 점검 (Dead Code·중복 코드) | 쓰이지 않는 코드 1건 삭제, 중복 2곳 확인 (5장) |
 
 ## 2. 자동 테스트 (단위 · API · 통합 · 회귀)
@@ -108,6 +109,20 @@ cd backend && python -m pytest
 - **서버 시작 시 경고:** `SECRET_KEY` 를 예시 값으로 두고 서버를 켜면 시작 로그에 경고 문구가 나오는 것을 확인했습니다.
 - **예전 분석 자동 갱신:** `rule-v1` 로 저장된 결과가 서버 시작 시 `rule-v2` 로 다시 분석되는 것을 테스트로 확인했습니다 (`test_outdated_analysis_reanalyzed_on_startup`). 팀원 PC 의 MariaDB 에 이미 있는 리뷰도 서버를 다시 켜면 자동으로 중립 분류가 적용됩니다.
 - **실제 MariaDB 에서 전체 테스트:** 이번 실행에서는 하지 않았습니다. 팀원 PC 에서 `TEST_DATABASE_URL` 에 `pinpoint_test` DB 를 지정해 한 번 실행하는 것을 권장합니다 ([backend/tests/README.md](../backend/tests/README.md)).
+
+## 6-1. 배포 환경 확인 (10일차, 2026-10-20)
+
+배포 주소: <https://semiproject01d-production.up.railway.app> · 구성: Railway 웹 서비스(uvicorn 1개) + MariaDB 11 컨테이너 ([10_deployment.md](10_deployment.md))
+
+| 항목 | 결과 |
+|---|---|
+| 서버 시작 | 통과 — 로그 `Application startup complete` · `SECRET_KEY` 설정 후 시작 경고 없음: ______ |
+| 실제 MariaDB 연결 | 통과 — MariaDB 11.8 에서 테이블 자동 생성·데모 데이터 입력, `/api/v1/health` → `{"status":"ok","database":"ok","model_version":"rule-v2"}` |
+| 화면 응답 | 통과 — `/login` 화면 표시 (HTTPS) |
+| 사용자 시나리오 S-01\~S-12 (배포 주소) | 확인자: 정다은 · 결과: ______ (이메일 인증 단계는 `EMAIL_VERIFICATION=0` 으로 생략) |
+| 휴대폰(LTE) 접속 | ______ |
+
+배포 중 발견한 문제 2건(I-31, I-32)은 [08_issue_log.md](08_issue_log.md) 에 기록했습니다.
 
 ## 7. 결론
 

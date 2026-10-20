@@ -2,6 +2,7 @@
 
 쇼핑몰 리뷰를 수집·정제·분석해서 셀러가 **불만이 숨어 있는 리뷰를 빠르게 찾고(위험 리뷰), 상품 문제와 배송·포장 문제를 나눠 보고, CS 답글까지 바로 처리**할 수 있게 돕는 대시보드 서비스입니다.
 
+- **서비스 주소:** <https://semiproject01d-production.up.railway.app> (Railway + MariaDB, 배포 방법은 [docs/10_deployment.md](docs/10_deployment.md))
 - 목표 사용자: 네이버 스마트스토어·쿠팡 등 중소형 셀러, 자사몰 마케팅·CS 담당자
 - 자세한 기획: [docs/01_project_overview.md](docs/01_project_overview.md) · 요구사항: [docs/02_requirements.md](docs/02_requirements.md)
 
@@ -110,7 +111,7 @@ python -m uvicorn main:app --reload        # 최상위 폴더에서
 
 테이블은 서버를 처음 켤 때 자동으로 만들어지고, DB 가 비어 있으면 데모 데이터가 들어갑니다.
 
-- **데모 계정**: `demo@pinpoint.kr` / `Pinpoint1!`
+- **데모 계정** (로컬 개발용): `demo@pinpoint.kr` / `Pinpoint1!` — 배포 서버에서는 비밀번호를 바꿔 두었으므로 이 값으로 로그인되지 않습니다
 
 ## 이메일 인증 (회원가입 · 비밀번호 변경)
 

@@ -116,11 +116,11 @@ cd backend && python -m pytest
 
 | 항목 | 결과 |
 |---|---|
-| 서버 시작 | 통과 — 로그 `Application startup complete` · `SECRET_KEY` 설정 후 시작 경고 없음: ______ |
+| 서버 시작 | 통과 — 로그 `Application startup complete` · `SECRET_KEY` 설정 후 시작 경고 없음: 경고 없음 |
 | 실제 MariaDB 연결 | 통과 — MariaDB 11.8 에서 테이블 자동 생성·데모 데이터 입력, `/api/v1/health` → `{"status":"ok","database":"ok","model_version":"rule-v2"}` |
 | 화면 응답 | 통과 — `/login` 화면 표시 (HTTPS) |
-| 사용자 시나리오 S-01\~S-12 (배포 주소) | 확인자: 정다은 · 결과: ______ (이메일 인증 단계는 `EMAIL_VERIFICATION=0` 으로 생략) |
-| 휴대폰(LTE) 접속 | ______ |
+| 사용자 시나리오 S-01\~S-12 (배포 주소) | 확인자: 정다은 · 결과: 통과 (12개 중 12개) (이메일 인증 단계는 `EMAIL_VERIFICATION=0` 으로 생략) |
+| 휴대폰(LTE) 접속 | 통과(LTE 환경에서도 모든 기능 정상 동작) |
 
 배포 중 발견한 문제 2건(I-31, I-32)은 [08_issue_log.md](08_issue_log.md) 에 기록했습니다.
 

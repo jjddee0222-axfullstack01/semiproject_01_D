@@ -38,7 +38,7 @@
 | 문서 | 내용 |
 |---|---|
 | [01_project_overview](docs/01_project_overview.md) | 기획 개요 |
-| [02_requirements](docs/02_requirements.md) | 기능(FR-01~27)·비기능(NFR-01~11) 요구사항, User Story |
+| [02_requirements](docs/02_requirements.md) | 기능(FR-01\~27)·비기능(NFR-01\~11) 요구사항, User Story |
 | [03_ui_design](docs/03_ui_design.md) | 화면 목록·흐름 |
 | [04_database_design](docs/04_database_design.md) | 테이블·관계 |
 | [05_api_spec](docs/05_api_spec.md) | REST API 명세 |

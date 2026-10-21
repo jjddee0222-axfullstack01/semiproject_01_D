@@ -79,8 +79,14 @@ def fresh_db():
 
 @pytest.fixture
 def session():
-    """DB 를 직접 확인할 때 사용하는 SQLAlchemy 세션"""
-    with db.SessionLocal() as s:
+    """DB 를 직접 확인할 때 사용하는 SQLAlchemy 세션
+
+    MariaDB(InnoDB)의 기본 격리 수준(REPEATABLE READ)에서는 한 트랜잭션이 처음 읽은 시점의 데이터를 계속 보므로,
+    화면·API 요청(서버의 다른 DB 연결)이 저장한 값을 테스트에서 확인할 수 있게 READ COMMITTED 로 연다.
+    서버 코드는 요청마다 새 세션을 쓰므로 해당 없음. SQLite 는 이 설정이 필요 없음 (I-33)
+    """
+    bind = db.engine if db.IS_SQLITE else db.engine.execution_options(isolation_level="READ COMMITTED")
+    with db.SessionLocal(bind=bind) as s:
         yield s
 
 

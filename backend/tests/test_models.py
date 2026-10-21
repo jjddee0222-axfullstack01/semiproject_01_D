@@ -3,13 +3,14 @@ from datetime import date, datetime
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 import models as m
 
 
 def _commit_fails(session):
-    with pytest.raises(IntegrityError):
+    # SQLite·MariaDB 모두 저장을 거부해야 함. MariaDB 는 CHECK 제약 위반(4025)을 OperationalError 로 알림 (I-33)
+    with pytest.raises((IntegrityError, OperationalError)):
         session.commit()
     session.rollback()
 

@@ -72,7 +72,8 @@ def test_bad_product_path_shows_404_page(page, path):
 
 def test_bad_product_id_in_api(page):
     r = page.get(f"{API}/products/99999999999999999999")
-    assert r.status_code == 404 and r.json()["code"] == "NOT_FOUND"
+    # SQLite 는 정수 범위 초과(OverflowError → NOT_FOUND), MariaDB 는 그대로 조회해 '없음'(PRODUCT_NOT_FOUND). 둘 다 404 (I-33)
+    assert r.status_code == 404 and r.json()["code"] in ("NOT_FOUND", "PRODUCT_NOT_FOUND")
     assert error_code(page.get(f"{API}/products/abc")) == "VALIDATION_ERROR"     # API 오류 형식은 그대로
 
 

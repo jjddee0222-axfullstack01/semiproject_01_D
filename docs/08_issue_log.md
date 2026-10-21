@@ -11,7 +11,7 @@
 |---|---|---|
 | 높음 | 6 | 모두 해결 |
 | 중간 | 15 | 모두 해결 |
-| 낮음 | 11 | 모두 해결 |
+| 낮음 | 12 | 모두 해결 |
 
 ## 이슈 목록
 
@@ -49,6 +49,7 @@
 | I-30 | 9일차 통합 점검 | 낮음 | 사이드바 로그아웃이 GET 링크라서, 다른 사이트가 `<img src=".../logout">` 같은 방법으로 사용자를 몰래 로그아웃시킬 수 있음 | 상태를 바꾸는 동작을 GET 으로 허용 | 로그아웃은 POST 로만 (사이드바는 폼 버튼). `GET /logout` 은 로그아웃하지 않고 대시보드(비로그인이면 로그인 화면)로 이동 | `test_get_logout_does_not_log_out`, `test_post_logout_logs_out`, `test_sidebar_logout_is_post_form` |
 | I-31 | 10일차 배포 (2026-10-20) | 중간 | Railway 첫 배포에서 서버가 `uvicorn: command not found` 로 시작되지 않음 | `requirements.txt` 가 저장소 최상위가 아니라 `backend/` 안에 있어, 빌드 단계에서 패키지 설치가 건너뛰어짐 | 웹 서비스 Settings 의 Root Directory 를 `backend` 로 지정 (`10_deployment.md` 5장) | 빌드 로그에 패키지 설치 기록, 서버 시작 로그 `Application startup complete` |
 | I-32 | 10일차 배포 | 중간 | 서버 시작 시 `[DB 연결 실패] ... @:3306` — DB 주소의 호스트가 비어 `localhost` 로 접속을 시도함 | `DATABASE_URL` 의 `${{MariaDB.RAILWAY_PRIVATE_DOMAIN}}` 참조가 서비스 이름과 맞지 않아 빈 값으로 바뀜 | MariaDB 서비스의 Private Networking 주소(`mariadb.railway.internal`)를 직접 입력 (`10_deployment.md` 4장) | 시작 로그 `[PIN POINT] DB: mariadb+pymysql://pinpoint:***@mariadb.railway.internal:3306/...`, `/api/v1/health` → `database: ok` |
+| I-33 | 10일차 MariaDB 전체 테스트 (2026-10-21) | 낮음 | 테스트를 실제 MariaDB(`TEST_DATABASE_URL`)로 돌리면 347개 중 11개 실패. 배포 서버는 모든 기능 정상 | **테스트 코드의 DB 차이**: ① 테스트가 확인용으로 여는 세션이 MariaDB 기본 격리 수준(REPEATABLE READ) 때문에 화면 요청이 저장한 값을 못 봄(8건) ② MariaDB 는 CHECK 제약 위반을 `IntegrityError` 가 아니라 `OperationalError`(4025)로 알림(3건, 저장 거부 자체는 정상) ③ 범위를 넘는 ID 의 오류 코드가 SQLite 와 다름(1건, 둘 다 404). 서버 코드는 요청마다 새 세션을 쓰므로 영향 없음 | 테스트 세션을 READ COMMITTED 로 열고(`conftest.session`), 제약 위반은 두 예외 모두 허용, ID 범위 초과는 두 오류 코드 모두 허용. 서버 코드 변경 없음 | MariaDB·SQLite 양쪽에서 전체 pytest |
 
 ## 남은 위험 (알고 있지만 이번 범위에서 두는 것)
 

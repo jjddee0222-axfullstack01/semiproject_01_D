@@ -134,7 +134,7 @@ FastAPI 한 서버가 Jinja2 화면과 REST API(`/api/v1`)를 함께 제공하�
 | Done Criteria | 1) 고치기 전에 실패하는 테스트로 재현 2) 결함마다 테스트 3) 전체 테스트·사용자 시나리오 통과 4) `08_issue_log`·`09`·`11`·`05`·`03`·`CLAUDE.md` 반영 |
 | Test | 새 테스트 12개 중 11개가 고치기 전 코드에서 실패하고 고친 뒤 통과, 전체 347개 통과, 시나리오 12개 통과 |
 | 결과 (Agent 보고) | I-26 입력 길이·비밀번호 규칙 통일(`main.too_long`, `schemas` 규칙 사용) · I-27 비밀번호 변경 시 다른 기기 로그아웃(`auth.end_other_sessions`) · I-28 설정 비밀번호 확인 칸 · I-29 CS챗봇 중복 저장 방지 · I-30 로그아웃 POST 전용. 변경 파일: `main.py`, `auth.py`, `api_v1.py`, `templates/_sidebar.html`·`joinmembership.html`·`passwordreset.html`·`informationedit.html`, `tests/test_day9_fixes.py`(새 테스트 12개), 기존 테스트 4곳(로그아웃 POST, 비밀번호 확인 값). 그 밖에 `models.py` 주석, `setup_mariadb.sql` 예시 값 표기 통일 |
-| 사람 리뷰 | (팀원 작성) 확인자: ______ · PR: ______ · 의견: ______ |
+| 사람 리뷰 | 확인자: 정다 · PR: #1 (`feature/day9-qa-fixes`, 2026-10-19 병합) · 의견: 결함 5건(I-26\~I-30) 재현 테스트와 수정 확인, 전체 347개 통과 확인. 로그아웃 POST 전환으로 바뀐 기존 테스트 4곳이 기대값 변경만인지 확인. 의견 보내기 화면 길이 제한은 남아 있어 다음 작업으로 기록 |
 | 커밋 | `fix: 9일차 통합 점검 수정 (I-26~I-30)` |
 
 ### T-7-1. 위험 키워드 변경 즉시 반영 (7일차, 2026-10-15)

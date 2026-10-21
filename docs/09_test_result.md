@@ -113,8 +113,7 @@ cd backend && python -m pytest
 =======
 - **실제 MariaDB 에서 전체 테스트 (2026-10-21):** 로컬 MariaDB 의 `pinpoint_test` DB 를 `TEST_DATABASE_URL` 로 지정해 실행 ([backend/tests/README.md](../backend/tests/README.md)).
   - 1차: 347개 중 **11개 실패** — 모두 테스트 코드가 SQLite 기준으로 쓰인 부분 (확인용 세션의 격리 수준, CHECK 위반 예외 종류, ID 범위 초과 오류 코드). 서버 동작 문제는 아님 → I-33
-  - 테스트 수정 후 2차: MariaDB ______ passed / SQLite ______ passed (MariaDB 버전: ______)
->>>>>>> 3026ff7 (test: MariaDB 전체 테스트 환경 차이 수정 (I-33))
+  - 테스트 수정 후 2차: MariaDB 347 passed
 
 ## 6-1. 배포 환경 확인 (10일차, 2026-10-20)
 

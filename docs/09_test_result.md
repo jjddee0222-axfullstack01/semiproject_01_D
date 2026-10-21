@@ -108,12 +108,9 @@ cd backend && python -m pytest
 
 - **서버 시작 시 경고:** `SECRET_KEY` 를 예시 값으로 두고 서버를 켜면 시작 로그에 경고 문구가 나오는 것을 확인했습니다.
 - **예전 분석 자동 갱신:** `rule-v1` 로 저장된 결과가 서버 시작 시 `rule-v2` 로 다시 분석되는 것을 테스트로 확인했습니다 (`test_outdated_analysis_reanalyzed_on_startup`). 팀원 PC 의 MariaDB 에 이미 있는 리뷰도 서버를 다시 켜면 자동으로 중립 분류가 적용됩니다.
-<<<<<<< HEAD
-- **실제 MariaDB 에서 전체 테스트:**2026-10-21, MariaDB 11.4.3 버전에서 347개 통과
-=======
-- **실제 MariaDB 에서 전체 테스트 (2026-10-21):** 로컬 MariaDB 의 `pinpoint_test` DB 를 `TEST_DATABASE_URL` 로 지정해 실행 ([backend/tests/README.md](../backend/tests/README.md)).
+- **실제 MariaDB 에서 전체 테스트 (2026-10-21, MariaDB 11.4.3):** 로컬 MariaDB 의 `pinpoint_test` DB 를 `TEST_DATABASE_URL` 로 지정해 실행 ([backend/tests/README.md](../backend/tests/README.md)).
   - 1차: 347개 중 **11개 실패** — 모두 테스트 코드가 SQLite 기준으로 쓰인 부분 (확인용 세션의 격리 수준, CHECK 위반 예외 종류, ID 범위 초과 오류 코드). 서버 동작 문제는 아님 → I-33
-  - 테스트 수정 후 2차: MariaDB 347 passed
+  - 테스트 수정 후 2차: **MariaDB 347개 통과**, SQLite 347개 통과
 
 ## 6-1. 배포 환경 확인 (10일차, 2026-10-20)
 

@@ -2,7 +2,9 @@
 
 쇼핑몰 리뷰를 수집·정제·분석해서 셀러가 **불만이 숨어 있는 리뷰를 빠르게 찾고(위험 리뷰), 상품 문제와 배송·포장 문제를 나눠 보고, CS 답글까지 바로 처리**할 수 있게 돕는 대시보드 서비스입니다.
 
-- **서비스 주소:** <https://semiproject01d-production.up.railway.app> (Railway + MariaDB, 배포 방법은 [docs/10_deployment.md](docs/10_deployment.md))
+- **서비스 주소:** <https://semiproject01d-production.up.railway.app>
+  - 회원가입 후 바로 사용할 수 있습니다 (배포 서버는 이메일 인증 단계 생략, 아래 [배포](#배포-railway) 참고)
+  - 상태 확인: <https://semiproject01d-production.up.railway.app/api/v1/health> · API 문서: <https://semiproject01d-production.up.railway.app/docs>
 - 목표 사용자: 네이버 스마트스토어·쿠팡 등 중소형 셀러, 자사몰 마케팅·CS 담당자
 - 자세한 기획: [docs/01_project_overview.md](docs/01_project_overview.md) · 요구사항: [docs/02_requirements.md](docs/02_requirements.md)
 
@@ -54,11 +56,12 @@
 | 구분 | 사용 기술 |
 |---|---|
 | 백엔드 | Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.0, Uvicorn |
-| 데이터베이스 | MariaDB 10.5+ (utf8mb4). 테스트는 임시 SQLite 파일 사용 |
+| 데이터베이스 | MariaDB 10.5+ (utf8mb4, 배포는 MariaDB 11). 테스트는 임시 SQLite 파일 사용 |
 | 화면 | Jinja2 템플릿(서버에서 HTML 생성) + JavaScript fetch + ECharts(차트) |
 | 인증 | 세션 테이블 + HttpOnly 세션 쿠키, 비밀번호 PBKDF2 해시 |
 | 분석 | 규칙 기반 감성(긍정·중립·부정)·위험도·이슈 유형·키워드 분석 (`analysis.py`, model_version `rule-v2`) |
 | 테스트 | pytest, FastAPI TestClient |
+| 배포 | Railway (웹 서비스 + MariaDB 11 Docker 컨테이너, HTTPS 자동) |
 
 ## 폴더 구조
 
@@ -117,21 +120,49 @@ python -m uvicorn main:app --reload        # 최상위 폴더에서
 
 `backend/.env` 에 메일 서버를 설정하면 실제 메일로 6자리 인증 코드를 보냅니다.
 
-```
-MAIL_HOST=smtp.gmail.com     # 비워 두면 '개발 모드': 메일 대신 화면과 서버 콘솔에 코드 표시
+```dotenv
+# 비워 두면 '개발 모드': 메일 대신 화면과 서버 콘솔에 코드 표시
+MAIL_HOST=smtp.gmail.com
 MAIL_PORT=587
 MAIL_USER=보내는메일@gmail.com
-MAIL_PASSWORD=앱_비밀번호      # Gmail 은 '앱 비밀번호' 사용
+# Gmail 은 '앱 비밀번호' 사용 (2단계 인증 필요). 메일 발송 서비스(Brevo 등)의 SMTP 키도 가능
+MAIL_PASSWORD=앱_비밀번호
 MAIL_FROM=보내는메일@gmail.com
-EMAIL_VERIFICATION=1         # 0 이면 인증 코드 확인을 끔 (시연용)
+# 0 이면 인증 코드 확인을 끔 (시연·배포 서버)
+EMAIL_VERIFICATION=1
 ```
+
+> `.env` 는 값 뒤에 `#` 주석을 붙이면 주석까지 값으로 읽힙니다. 주석은 항상 따로 한 줄에 씁니다.
 
 코드는 10분 유효, 재발송은 60초 뒤, 5번 틀리면 폐기됩니다. 같은 이메일로는 1시간에 5번, 같은 PC(IP)에서는 1시간에 20번까지 보낼 수 있습니다.
 코드는 서버에만 저장되므로 서버를 다시 켜면 새로 받아야 합니다. REST API 회원가입(`POST /api/v1/auth/signup`)도 `email_code` 가 필요합니다.
 
+**배포 서버에서는 꺼져 있습니다** (`EMAIL_VERIFICATION=0`). 사용 중인 배포 환경이 외부 메일 발송(SMTP)을 보장하지 않기 때문입니다. 기능 자체는 구현·테스트되어 있어, 메일 발송이 되는 서버에서는 `MAIL_*` 를 설정하고 `EMAIL_VERIFICATION=1` 로 바꾸면 코드 수정 없이 켜집니다. 로컬에서 `MAIL_HOST` 를 비워 두면 인증 흐름 전체를 개발 모드로 확인할 수 있습니다.
+
+## 배포 (Railway)
+
+```
+[브라우저] --HTTPS--> [Railway 웹 서비스: uvicorn 1개 (Root Directory = backend)] --내부망--> [MariaDB 11 컨테이너 + 볼륨]
+```
+
+| 항목 | 값 |
+|---|---|
+| 서비스 주소 | <https://semiproject01d-production.up.railway.app> |
+| 웹 서비스 Root Directory | `backend` |
+| 시작 명령 | `uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers --forwarded-allow-ips '*'` |
+| 상태 확인 경로 | `/api/v1/health` |
+| 주요 환경 변수 | `DATABASE_URL`(`mariadb+pymysql://…@mariadb.railway.internal:3306/pinpoint`), `SECRET_KEY`, `COOKIE_SECURE=1`, `EMAIL_VERIFICATION=0`, `TZ=Asia/Seoul` |
+
+- **업데이트:** `main` 에 push 하면 자동으로 다시 배포됩니다. 상태 확인을 통과해야 새 버전으로 바뀝니다.
+- **프로세스는 1개**(`--workers 1`): 로그인 잠금·인증 코드 기록이 서버 메모리에 있기 때문입니다.
+- **시간대:** `TZ=Asia/Seoul` 은 Railway 변수로 넣습니다 (`.env` 에 넣으면 적용되지 않음).
+- **제한:** Railway 체험판(30일)을 사용합니다. 계속 운영하려면 유료 전환 또는 리눅스 서버로 옮깁니다.
+- 처음부터 다시 배포하는 방법, 화면별 입력값, 배포 중 겪은 문제(I-31·I-32)는 [docs/10_deployment.md](docs/10_deployment.md) 에 있습니다.
+
 ## 휴대폰에서 보기
 
 폭 768px 이하에서는 사이드바가 숨고 상단 ☰ 버튼으로 엽니다. 여러 칸 화면은 한 줄로 쌓입니다.
+휴대폰 브라우저에서 <https://semiproject01d-production.up.railway.app> 로 바로 접속할 수 있습니다.
 
 ## 테스트
 
@@ -152,7 +183,8 @@ python -m pytest -m pages   # 화면만  /  -m api : API만  /  -m unit : 단위
   만드는 법: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 - 로그인은 같은 이메일로 5번(같은 PC 에서 20번) 틀리면 10분 동안 잠깁니다. 시연 중 잠겼다면 서버를 다시 켜면 풀립니다.
   여러 사람이 같은 와이파이로 접속하는 발표라면 `.env` 의 `LOGIN_IP_MAX_FAILS`, `EMAIL_SEND_LIMIT_PER_IP` 를 늘리세요.
-- 운영(`COOKIE_SECURE=1`)에서는 메일 서버(`MAIL_*`)를 꼭 설정합니다. 없으면 인증 코드를 화면에 보여 주지 않고 발송을 거부합니다.
+- 운영(`COOKIE_SECURE=1`)에서는 메일 서버(`MAIL_*`)를 설정하거나 `EMAIL_VERIFICATION=0` 으로 인증을 끕니다 (현재 배포 서버는 `0`). 메일 서버 없이 인증을 켜 두면 인증 코드를 화면에 보여 주지 않고 발송을 거부합니다.
+- 배포 서버의 비밀 값(`SECRET_KEY`, DB 비밀번호)은 Railway 변수에만 저장하고, 데모 계정 비밀번호는 배포 직후 바꿉니다.
 - 분석 CSV 내보내기는 `=`·`+`·`-`·`@` 로 시작하는 칸 앞에 `'` 를 붙여 엑셀에서 수식으로 실행되지 않게 합니다.
 
 ## Git 커밋 규칙
@@ -167,4 +199,4 @@ style:    화면 디자인·CSS
 chore:    설정·기타 (.gitignore 등)
 ```
 
-브랜치: 지금은 `main` 하나로 작업합니다. 커밋은 테스트가 통과한 상태에서 하고, 최종 버전은 `release: v1.0 프로젝트 최종 버전` 커밋과 `v1.0.0` 태그로 남깁니다 ([docs/10_deployment.md](docs/10_deployment.md)).
+브랜치: 작은 수정은 `main` 에, 큰 작업은 `feature/기능명` 브랜치 → PR → 팀원 확인 후 합칩니다 (예: PR #1 `feature/day9-qa-fixes`). `main` 에 push 하면 배포 서버에 자동 반영되므로 커밋은 테스트가 통과한 상태에서 하고, 최종 버전은 `release: v1.0 프로젝트 최종 버전` 커밋과 `v1.0.0` 태그로 남깁니다 ([docs/10_deployment.md](docs/10_deployment.md)).

@@ -1,4 +1,6 @@
-"""v1.1 notification settings and reply templates — 위험 리뷰 메일 알림 설정, 셀러 답글 템플릿
+"""v1.1 notification settings and reply templates
+
+위험 리뷰 메일 알림 설정, 셀러 답글 템플릿
 
 서버 시작(create_all)이 먼저 만들었을 수 있으므로 이미 있는 테이블은 건너뜀 (0001 과 같은 방식)
 

@@ -1,4 +1,6 @@
-"""baseline v1.0.0 tables — v1.0.0 의 15개 테이블
+"""baseline v1.0.0 tables (15)
+
+v1.0.0 의 15개 테이블
 
 서버(create_all)가 이미 만든 DB 에서도 그대로 실행할 수 있도록, 이미 있는 테이블과 그 인덱스는 건너뜀
 → 기존 DB 도 'python -m alembic upgrade head' 한 번이면 버전 기록(alembic_version)이 생김

@@ -1,4 +1,6 @@
-"""v1.2 product actions and review memos — 상품 개선 조치 기록, 리뷰 내부 메모·처리 상태
+"""v1.2 product actions and review memos
+
+상품 개선 조치 기록, 리뷰 내부 메모·처리 상태
 
 서버 시작(create_all)이 먼저 만들었을 수 있으므로 이미 있는 테이블은 건너뜀 (0001·0002 와 같은 방식)
 

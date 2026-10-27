@@ -29,7 +29,7 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 | 화면 | Jinja2 템플릿(서버에서 HTML 생성, `backend/templates`) + JavaScript fetch + ECharts | 로그인, 폼 처리, 리뷰 목록·블라인드, CS챗봇, 통계 차트(fetch 로 `/api/v1/stats/*` 호출) |
 | 디자인 시안 | 정적 HTML (`frontend/`) | 디자이너 작업본. 서버에서는 사용하지 않고 템플릿에 반영 |
 | API 서버 | FastAPI, Pydantic v2, SQLAlchemy 2.0 | 인증·인가, 리뷰·답글·통계 API, 입력 검증. 테이블은 서버 시작 시 자동 생성 + (v1.1) Alembic 으로 변경 이력 관리 (`backend/migrations`, 7장 9) |
-| 데이터베이스 | MariaDB 10.5+ (utf8mb4), 임베딩은 JSON 컬럼 | 17개 테이블 (v1.0.0 15개 + v1.1 2개, `04_database_design.md`) |
+| 데이터베이스 | MariaDB 10.5+ (utf8mb4), 임베딩은 JSON 컬럼 | 19개 테이블 (v1.0.0 15개 + v1.1 2개 + v1.2 2개, `04_database_design.md`) |
 | 데이터·AI 파이프라인 | 규칙 기반 분석 (`analysis.py`, `rule-v2`) | 적재, 정제, 감성·위험도·이슈유형·키워드 라벨링. 감성 모델·LLM 은 `analyze_review()` 교체로 도입 예정 |
 | 실행 환경 | 로컬 (uvicorn, 프로세스 1개) / 배포: Railway 웹 서비스(uvicorn 1개) + MariaDB 11 컨테이너 | 배포 절차는 `10_deployment.md`. 시도 제한 기록이 서버 메모리에 있으므로 `--workers` 는 1 로 실행 |
 
@@ -85,6 +85,12 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 
 **(v1.1) 부정 키워드 급증·리포트:** `insights.py` 한 곳에서 계산해 대시보드·API·리포트가 같은 값을 씀. 리포트는 서버가 HTML 을 만들고 인쇄용 CSS(`@media print`)로 메뉴를 숨겨 브라우저 '인쇄 → PDF로 저장'으로 파일을 만듦 (PDF 라이브러리 추가 없음)
 
+**(v1.2) 셀러 도구 (`seller_tools.py`):** 분석 결과(`review_analysis`)는 바꾸지 않고 읽어서 계산만 함 → `MODEL_VERSION` 과 무관. 조치 효과는 조치일 전후 **같은 길이** 기간을 비교(최대 30일, 조치 후 3건 미만이면 판단 보류), 불일치는 SQL 조건(평점 ≥ 4 AND (부정 OR 아쉬움 표현))이라 페이지·필터와 함께 동작, 응답 시간은 리뷰 `created_at`(업로드 시각) → 첫 답글이며 '지금'도 DB 시각(`SELECT now()`)으로 비교(SQLite=UTC, MariaDB=서버 시간대 차이 방지)
+
+**(v1.2) 엑셀 업로드:** 새 라이브러리 없이 표준 `zipfile` + XML 로 첫 시트만 읽음 (풀었을 때 50MB 넘으면 거부 — 압축 폭탄 방지). 날짜 셀은 엑셀 일련번호 → 날짜, 열 이름은 공백·괄호 설명을 빼고 `HEADER_ALIASES` 와 비교. 이후는 CSV 와 같은 `ingest_rows`
+
+**(v1.2) 개인정보 가리기:** 저장은 원문 그대로(US-10 원문 보존), 내보낼 때만 가림 — Jinja 필터 `|pii`, Pydantic `field_serializer`, 리뷰 CSV·알림 메일. 블라인드 신고 자료만 원문
+
 **(v1.1) 답글 템플릿:** CS챗봇·답글 추천 API → 셀러 템플릿이 있으면 자리 표시자를 `str.replace` 로 채우고(셀러가 쓴 중괄호로 오류가 나지 않게 `str.format` 미사용), 없으면 기본 초안 (`reply_drafts.seller_reply_draft`)
 
 ## 6. 기초 구조 충족 점검 (6일차 기준)
@@ -114,6 +120,8 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 | 9 | 스키마 변경 이력 관리 (v1.1) | 반영: Alembic 도입. `0001` 기준선(v1.0.0 15개)·`0002` v1.1 2개. 이미 있는 테이블은 건너뛰므로 운영 DB 에 그대로 `upgrade head` 가능. `alembic check` 로 모델과 어긋남 검사 |
 | 10 | 자동 테스트 실행 (v1.1) | 반영: GitHub Actions (`.github/workflows/tests.yml`) — push·PR 마다 SQLite 전체 테스트 + MariaDB 11 컨테이너에서 마이그레이션 확인과 전체 테스트 |
 | 11 | 중복 코드 정리 (v1.1) | 반영: 재분석 반복문을 `database.reanalyze_reviews` 하나로 합침 (키워드 변경·규칙 버전 변경·내부 분석 API 공용, 셀러별 키워드 1회 조회). 옛 `POST /api/reviews` 삭제 → `POST /api/v1/reviews` |
+| 12 | 리뷰 속 개인정보 노출 (v1.2) | 반영: 전화번호·이메일을 화면·API·CSV·메일에서 가림, 원문은 보존 |
+| 13 | 리다이렉트 안전 (v1.2) | 반영: 메모 저장 후 돌아갈 주소(`next`)는 `/reviews` 로 시작하는 우리 사이트 주소만 허용 (오픈 리다이렉트 방지) |
 
 ## 8. 미결정 사항
 

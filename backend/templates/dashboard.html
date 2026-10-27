@@ -258,6 +258,30 @@
             color: #111111;
         }
 
+        /* v1.2 처음 쓰는 셀러 안내 · 답글 응답 시간 · 도움말 */
+        .onboarding-card { border: 1px solid #D0EBFF; background: #F8FBFF; }
+        .onboarding-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 6px 0 16px; counter-reset: step; }
+        .onboarding-steps li { list-style: none; padding: 14px; border-radius: 10px; background: #ffffff; border: 1px solid #E7F5FF; font-size: 13px; line-height: 1.5; }
+        .onboarding-steps li b { display: block; margin-bottom: 4px; color: #1971C2; }
+        .onboarding-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .onboarding-actions a, .onboarding-actions button {
+            display: inline-flex; align-items: center; height: 38px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+            text-decoration: none; cursor: pointer; font-family: inherit; border: 1px solid #111111;
+        }
+        .onboarding-actions .primary { background: #111111; color: #ffffff; }
+        .onboarding-actions .secondary { background: #ffffff; color: #111111; }
+        .onboarding-actions form { margin: 0; }
+        .sample-banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; margin-bottom: 20px;
+                         border-radius: 10px; background: #FFF9DB; color: #5C3D00; font-size: 13px; }
+        .sample-banner button { height: 32px; padding: 0 12px; border: 1px solid #E67700; border-radius: 8px; background: #ffffff; color: #E67700; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .help-link { margin-left: 6px; font-size: 12px; font-weight: 500; color: #ADB5BD; text-decoration: none; }
+        .help-link:hover { color: #495057; }
+        .response-value { font-size: 22px; font-weight: 800; color: #111111; }
+        .response-sub { margin-top: 4px; font-size: 12px; color: #868E96; }
+        .response-warn { display: block; margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: #FFF5F5; color: #C92A2A; font-size: 13px; font-weight: 600; text-decoration: none; }
+        .response-ok { margin-top: 12px; font-size: 13px; color: #2B8A3E; }
+        @media (max-width: 768px) { .onboarding-steps { grid-template-columns: 1fr; } }
+
         /* v1.1 부정 키워드 급증 */
         .surge-list {
             display: flex;
@@ -317,6 +341,28 @@
         <h1 class="page-title">{{ current_user.mall_name }} 대시보드</h1>
         {% include '_flash.html' %}
 
+        {% if not has_products %}
+        <!-- v1.2 처음 쓰는 셀러 안내: 상품이 없을 때만 -->
+        <div class="card onboarding-card">
+            <div class="card-title">PIN POINT REVIEW 시작하기</div>
+            <ol class="onboarding-steps">
+                <li><b>1. 양식 받기</b>상품 조회 화면에서 업로드 양식(CSV)을 받거나, 스마트스토어·쿠팡에서 내려받은 리뷰 엑셀을 준비하세요.</li>
+                <li><b>2. 리뷰 올리기</b>CSV·엑셀(.xlsx) 파일을 올리면 감성·위험도·이슈 유형이 자동으로 분석됩니다.</li>
+                <li><b>3. 위험 리뷰부터 처리</b>대시보드 '처리할 일'과 CS챗봇에서 답글이 필요한 리뷰를 먼저 확인하세요.</li>
+            </ol>
+            <div class="onboarding-actions">
+                <a class="primary" href="{{ url_for('products') }}">리뷰 올리러 가기</a>
+                <form method="post" action="{{ url_for('sample_load') }}"><button type="submit" class="secondary">샘플 데이터로 먼저 체험하기</button></form>
+                <a class="secondary" href="{{ url_for('help_page') }}">도움말 보기</a>
+            </div>
+        </div>
+        {% elif has_sample %}
+        <div class="sample-banner">
+            <span>지금 보고 있는 데이터에 <b>샘플 상품</b>('[샘플]'로 시작)이 들어 있습니다. 다 둘러보셨으면 지우고 실제 리뷰를 올려 주세요.</span>
+            <form method="post" action="{{ url_for('sample_delete') }}"><button type="submit">샘플 데이터 지우기</button></form>
+        </div>
+        {% endif %}
+
         <!-- 처리할 일: 지금 손봐야 할 일과 바로 가는 링크 -->
         <div class="card todo-card">
             <div class="card-title">처리할 일</div>
@@ -338,7 +384,7 @@
             <!-- 왼쪽 영역 -->
             <div>
                 <div class="card">
-                    <div class="card-title">위험 리뷰</div>
+                    <div class="card-title">위험 리뷰<a class="help-link" href="{{ url_for('help_page') }}#risk" title="위험 리뷰는 어떻게 정하나요?">ⓘ 기준</a></div>
                     <div class="alert-box">
                         {% if risky_count > 0 %}
                         ⚠️ 위험 리뷰 {{ risky_count }}건이 감지되었습니다. 상세 내용을 확인해 주세요.
@@ -350,7 +396,7 @@
 
                 <!-- v1.1 부정 키워드 급증: 최근 7일 vs 이전 7일 -->
                 <div class="card surge-card">
-                    <div class="card-title">급증한 부정 키워드</div>
+                    <div class="card-title">급증한 부정 키워드<a class="help-link" href="{{ url_for('help_page') }}#surge" title="급증 기준">ⓘ 기준</a></div>
                     {% if surges %}
                     <div class="surge-list">
                         {% for s in surges %}
@@ -371,7 +417,7 @@
                     <div class="card-title">최근 등록된 리뷰</div>
                     <div class="review-list">
                         {% for review in recent_reviews %}
-                        <div class="review-item">{{ review.content_raw }}</div>
+                        <div class="review-item">{{ review.content_raw|pii }}</div>
                         {% else %}
                         <div class="review-item">등록된 리뷰가 없습니다.</div>
                         {% endfor %}
@@ -393,6 +439,21 @@
                         <div class="stat-label">당월 총 상품 구매자 수</div>
                         <div class="stat-value">{{ "{:,}".format(stats.buyers) }} 명</div>
                     </div>
+                </div>
+
+                <!-- v1.2 답글 응답 시간: 리뷰 등록(업로드) → 첫 답글 -->
+                <div class="card response-card">
+                    <div class="card-title">답글 응답 시간<a class="help-link" href="{{ url_for('help_page') }}#response" title="응답 시간 계산 방법">ⓘ 기준</a></div>
+                    <div class="response-value">{{ response.avg_text }}</div>
+                    <div class="response-sub">
+                        {% if response.replied %}평균 · 답글 {{ response.replied }}건 기준{% if response.within_day_ratio is not none %} · 24시간 안에 {{ response.within_day_ratio }}%{% endif %}
+                        {% else %}아직 단 답글이 없습니다{% endif %}
+                    </div>
+                    {% if response.overdue_risky %}
+                    <a class="response-warn" href="{{ url_for('cschatbot') }}">⚠️ {{ response.overdue_days }}일 넘게 답글이 없는 위험 리뷰 {{ response.overdue_risky }}건 →</a>
+                    {% else %}
+                    <div class="response-ok">✓ {{ response.overdue_days }}일 넘게 방치된 위험 리뷰가 없습니다.</div>
+                    {% endif %}
                 </div>
             </div>
         </div>

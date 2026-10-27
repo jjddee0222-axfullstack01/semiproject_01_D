@@ -22,9 +22,11 @@ from sqlalchemy.orm import Session, selectinload
 try:
     from .analysis import ISSUE_LABELS, RISK_SEVERITY, shop_report
     from .models import IssueType, Keyword, Polarity, Product, Review, ReviewKeyword, visible_reviews
+    from .seller_tools import response_stats
 except ImportError:
     from analysis import ISSUE_LABELS, RISK_SEVERITY, shop_report
     from models import IssueType, Keyword, Polarity, Product, Review, ReviewKeyword, visible_reviews
+    from seller_tools import response_stats
 
 SURGE_DAYS = 7
 SURGE_MIN_COUNT = 3
@@ -124,6 +126,11 @@ def period_report(db: Session, seller_id: int, period: str = "week", *, today: O
         {"label": "답글 처리율", "value": now_k["reply_rate"], "unit": "%",
          "delta": _delta(now_k["reply_rate"], prev_k["reply_rate"]), "good_when": "up"},
     ]
+    # v1.2 답글 응답 시간 (리뷰 등록 → 첫 답글, 작성일이 기간 안인 리뷰 기준)
+    resp_now = response_stats(db, seller_id, since=start, until=today)
+    resp_prev = response_stats(db, seller_id, since=prev_start, until=prev_end)
+    kpis.append({"label": "평균 답글 시간", "value": resp_now["avg_hours"], "unit": "시간",
+                 "delta": _delta(resp_now["avg_hours"], resp_prev["avg_hours"]), "good_when": "down"})
 
     analyzed = [r for r in current if r.analysis]
     sentiment_counts = Counter(r.analysis.sentiment for r in analyzed)

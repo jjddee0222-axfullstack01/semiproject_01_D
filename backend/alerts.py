@@ -13,10 +13,12 @@ from sqlalchemy.orm import Session, selectinload
 try:
     from .analysis import RISK_SEVERITY
     from .email_verify import dev_mode, send_mail
+    from .privacy import mask_pii
     from .models import NotificationSetting, Product, Review, ReviewAnalysis, User, visible_reviews
 except ImportError:
     from analysis import RISK_SEVERITY
     from email_verify import dev_mode, send_mail
+    from privacy import mask_pii
     from models import NotificationSetting, Product, Review, ReviewAnalysis, User, visible_reviews
 
 MAIL_LIST_LIMIT = 10          # 메일 본문에 보여 줄 위험 리뷰 수
@@ -59,7 +61,7 @@ def compose_risk_mail(user: User, reviews: list[Review], source: str) -> tuple[s
     subject = f"[PIN POINT REVIEW] 위험 리뷰 {len(reviews)}건이 새로 들어왔습니다"
     lines = [f"{user.name}님, '{source}' 업로드에서 답변이 필요한 위험 리뷰 {len(reviews)}건이 발견되었습니다.", ""]
     for i, r in enumerate(reviews[:MAIL_LIST_LIMIT], start=1):
-        text = r.content_raw.replace("\n", " ")
+        text = mask_pii(r.content_raw).replace("\n", " ")
         if len(text) > SNIPPET_LENGTH:
             text = text[:SNIPPET_LENGTH] + "…"
         lines.append(f"{i}. [{r.product.name}] ★{r.rating} 심각도 {r.analysis.severity} · {_mask(r.reviewer_name)}")

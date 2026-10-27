@@ -23,6 +23,7 @@
                 <li class="menu-item {{ 'active' if active_menu == 'reviews' }}"><a href="{{ url_for('review_list') }}">리뷰 목록</a></li>
                 <li class="menu-item {{ 'active' if active_menu == 'analysis' }}"><a href="{{ url_for('analysis') }}">분석</a></li>
                 <li class="menu-item {{ 'active' if active_menu == 'reports' }}"><a href="{{ url_for('reports') }}">리포트</a></li>
+                <li class="menu-item {{ 'active' if active_menu == 'marketing' }}"><a href="{{ url_for('marketing') }}">리뷰 활용</a></li>
                 <li class="menu-item {{ 'active' if active_menu == 'cschatbot' }}"><a href="{{ url_for('cschatbot') }}">CS챗봇</a></li>
             </ul>
         </div>
@@ -30,6 +31,7 @@
         <div class="sidebar-bottom">
             <ul class="menu-list">
                 <li class="menu-item {{ 'active' if active_menu == 'settings' }}"><a href="{{ url_for('settings') }}">설정</a></li>
+                <li class="menu-item {{ 'active' if active_menu == 'help' }}"><a href="{{ url_for('help_page') }}">도움말</a></li>
                 <li class="menu-item {{ 'active' if active_menu == 'feedback' }}"><a href="{{ url_for('feedback') }}">의견 보내기</a></li>
                 <!-- 로그아웃은 POST 로만 (GET 링크면 다른 사이트가 이미지 주소 등으로 몰래 로그아웃시킬 수 있음) -->
                 <li class="menu-item">

@@ -46,7 +46,7 @@ def test_upgrade_existing_create_all_db(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "alembic_version" in _tables(db_path)
     current = _run(db_path, "current")
-    assert "0002" in current.stdout
+    assert "0003" in current.stdout
 
 
 def test_downgrade_to_base(tmp_path):

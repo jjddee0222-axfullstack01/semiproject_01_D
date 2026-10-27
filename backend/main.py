@@ -42,13 +42,18 @@ try:
                            this_month)
     from .db import describe_db, get_session
     from .models import (BlindAction, Feedback, IngestLog, IssueType, Keyword, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                         ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ReplyTemplate, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
+                         ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ProductAction, ReplyTemplate, ReviewMemo, MemoStatus, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                          UserStatus, visible_reviews)
-    from .pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
+    from .pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text, parse_xlsx_bytes
     from .alerts import (compose_risk_mail, deliver, last_review_id, risk_email_enabled, risky_reviews_after,
                              set_risk_email)
-    from .insights import REPORT_PERIODS, keyword_surges, period_report
-    from .reply_drafts import (SENTIMENT_LABELS, TEMPLATE_MAX_LENGTH, TEMPLATE_PLACEHOLDERS, seller_reply_draft,
+    from .insights import REPORT_PERIODS, SURGE_DAYS, SURGE_MIN_COUNT, SURGE_RATIO, keyword_surges, period_report
+    from .privacy import mask_pii
+    from .onboarding import SAMPLE_PREFIX, has_sample, load_sample, remove_sample
+    from .seller_tools import (ACTION_WINDOW_DAYS, MISMATCH_CUES, OVERDUE_DAYS,
+                               action_effect, action_problem, best_reviews, detail_tips, mismatch_condition,
+                                    mismatch_count, product_actions, response_stats, strengths)
+    from .reply_drafts import (SENTIMENT_LABELS as TEMPLATE_LABELS, TEMPLATE_MAX_LENGTH, TEMPLATE_PLACEHOLDERS, seller_reply_draft,
                                    seller_templates, template_problem)
     from .schemas import EMAIL_PATTERN, PASSWORD_MESSAGE, PASSWORD_PATTERN
     from .security import hash_password, verify_password
@@ -64,13 +69,18 @@ except ImportError:
                           this_month)
     from db import describe_db, get_session
     from models import (BlindAction, Feedback, IngestLog, IssueType, Keyword, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                        ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ReplyTemplate, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
+                        ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ProductAction, ReplyTemplate, ReviewMemo, MemoStatus, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                         UserStatus, visible_reviews)
-    from pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
+    from pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text, parse_xlsx_bytes
     from alerts import (compose_risk_mail, deliver, last_review_id, risk_email_enabled, risky_reviews_after,
                             set_risk_email)
-    from insights import REPORT_PERIODS, keyword_surges, period_report
-    from reply_drafts import (SENTIMENT_LABELS, TEMPLATE_MAX_LENGTH, TEMPLATE_PLACEHOLDERS, seller_reply_draft,
+    from insights import REPORT_PERIODS, SURGE_DAYS, SURGE_MIN_COUNT, SURGE_RATIO, keyword_surges, period_report
+    from privacy import mask_pii
+    from onboarding import SAMPLE_PREFIX, has_sample, load_sample, remove_sample
+    from seller_tools import (ACTION_WINDOW_DAYS, MISMATCH_CUES, OVERDUE_DAYS,
+                              action_effect, action_problem, best_reviews, detail_tips, mismatch_condition,
+                                   mismatch_count, product_actions, response_stats, strengths)
+    from reply_drafts import (SENTIMENT_LABELS as TEMPLATE_LABELS, TEMPLATE_MAX_LENGTH, TEMPLATE_PLACEHOLDERS, seller_reply_draft,
                                   seller_templates, template_problem)
     from schemas import EMAIL_PATTERN, PASSWORD_MESSAGE, PASSWORD_PATTERN
     from security import hash_password, verify_password
@@ -148,7 +158,8 @@ def bizno(value: str) -> str:
     return f"{value[:3]}-{value[3:5]}-{value[5:]}" if value and len(value) == 10 else value
 
 
-templates.env.filters.update(mask_name=mask_name, dotdate=dotdate, bizno=bizno)
+templates.env.filters.update(mask_name=mask_name, dotdate=dotdate, bizno=bizno,
+                             pii=mask_pii)        # v1.2 리뷰 속 전화번호·이메일 가리기 (privacy.py)
 
 
 # ──────────────────────────────────────────────
@@ -438,9 +449,33 @@ def dashboard(request: Request,
     ).all()
     stats = db.get(ShopMonthlyStat, (user.id, this_month())) or {"visitors": 0, "buyers": 0}
 
+    has_products = db.scalar(select(Product.id).where(Product.seller_id == user.id).limit(1)) is not None
     return render(request, "dashboard.html", active_menu="dashboard",
                   risky_count=risky_count, recent_reviews=recent_reviews, stats=stats,
-                  todo=dashboard_todo(db, user), surges=keyword_surges(db, user.id))
+                  todo=dashboard_todo(db, user), surges=keyword_surges(db, user.id),
+                  response=response_stats(db, user.id),                       # v1.2 답글 응답 시간
+                  has_products=has_products, has_sample=has_sample(db, user))  # v1.2 처음 쓰는 셀러 안내
+
+
+# ── v1.2 샘플 데이터로 체험하기 (대시보드) — 이름이 '[샘플] ' 로 시작하는 상품으로 넣고 한 번에 지움
+@app.post("/onboarding/sample", name="sample_load")
+def sample_load(request: Request,
+                user: User = Depends(login_required),
+                db: Session = Depends(get_session)):
+    added = load_sample(db, user)
+    flash(request, f"샘플 리뷰 {added}건을 넣었습니다. 대시보드·상품 조회·CS챗봇을 둘러보세요. 다 보신 뒤 대시보드에서 지울 수 있습니다."
+          if added else "샘플 데이터가 이미 들어 있습니다.")
+    return redirect(request, "dashboard")
+
+
+@app.post("/onboarding/sample/delete", name="sample_delete")
+def sample_delete(request: Request,
+                  user: User = Depends(login_required),
+                  db: Session = Depends(get_session)):
+    count = remove_sample(db, user)
+    db.commit()
+    flash(request, f"샘플 상품 {count}개와 리뷰를 모두 지웠습니다." if count else "지울 샘플 데이터가 없습니다.")
+    return redirect(request, "dashboard")
 
 
 def dashboard_todo(db: Session, user: User) -> list[dict]:
@@ -530,22 +565,25 @@ async def products_upload(request: Request,
                           file: Optional[UploadFile] = File(None),
                           user: User = Depends(login_required),
                           db: Session = Depends(get_session)):
-    """리뷰 CSV 업로드 → 상품이 없으면 새로 만들고, 리뷰를 적재한 뒤 바로 분석 (중복·오류 행은 건너뜀)"""
+    """리뷰 CSV·엑셀(.xlsx) 업로드 → 상품이 없으면 새로 만들고, 리뷰를 적재한 뒤 바로 분석 (중복·오류 행은 건너뜀)"""
     filename = (file.filename or "").strip() if file else ""
+    lower = filename.lower()
     error = None
     if not filename:
-        error = "업로드할 CSV 파일을 선택해 주세요."
-    elif not filename.lower().endswith(".csv"):
-        error = "CSV 파일(.csv)만 업로드할 수 있습니다. 엑셀은 '다른 이름으로 저장 → CSV'로 저장해 주세요."
+        error = "업로드할 CSV 또는 엑셀(.xlsx) 파일을 선택해 주세요."
+    elif lower.endswith(".xls"):
+        error = "예전 엑셀 형식(.xls)은 읽을 수 없습니다. 엑셀에서 '다른 이름으로 저장 → Excel 통합 문서(.xlsx)' 또는 CSV로 저장해 주세요."
+    elif not lower.endswith((".csv", ".xlsx")):
+        error = "CSV(.csv) 또는 엑셀(.xlsx) 파일만 업로드할 수 있습니다."
     else:
         data = await file.read(UPLOAD_MAX_BYTES + 1)
         if len(data) > UPLOAD_MAX_BYTES:
             error = f"파일이 너무 큽니다. {UPLOAD_MAX_BYTES // (1024 * 1024)}MB 이하로 나눠서 올려 주세요."
         else:
             try:
-                rows = parse_csv_text(decode_csv_bytes(data))
+                rows = parse_xlsx_bytes(data) if lower.endswith(".xlsx") else parse_csv_text(decode_csv_bytes(data))
             except (IngestError, csv.Error) as exc:
-                error = f"CSV를 읽을 수 없습니다: {exc}"
+                error = f"파일을 읽을 수 없습니다: {exc}"
             else:
                 if not rows:
                     error = "헤더 아래에 리뷰 데이터가 없습니다."
@@ -650,6 +688,8 @@ def apply_review_filters(stmt, filters: dict):
         stmt = stmt.where(Review.rating == int(filters["rating"]))
     if filters["q"]:
         stmt = stmt.where(Review.content_raw.contains(filters["q"], autoescape=True))
+    if filters.get("mismatch"):                       # v1.2 별점·내용 불일치 (4~5점인데 아쉬움·불만)
+        stmt = stmt.where(mismatch_condition())
     return stmt
 
 
@@ -701,7 +741,14 @@ def product_dashboard(request: Request,
         .order_by(Review.blinded_at.desc(), Review.id.desc())
     ).all()
 
+    # v1.2 개선 조치(전후 비교) · 상세페이지 보완 포인트 · 별점·내용 불일치
+    actions = [{"action": a, "effect": action_effect(db, a)} for a in product_actions(db, product_id)]
+
     return render(request, "productdashboard.html", active_menu="products",
+                  actions=actions, tips=detail_tips(db, user.id, product_id),
+                  action_marks=[{"month": a["action"].action_date.strftime("%Y-%m"), "label": a["action"].title[:12]}
+                                for a in actions],
+                  mismatch=mismatch_count(db, user.id, product_id), today=date.today(),
                   product=product, reviews=reviews, risky_count=risky_count, blinded_reviews=blinded_reviews,
                   avg_rating=avg_rating, monthly_buyers=stat.buyers if stat else 0,
                   positive_summary=positive_summary, negative_summary=negative_summary,
@@ -710,6 +757,51 @@ def product_dashboard(request: Request,
                   sentiment_labels=SENTIMENT_LABELS, issue_labels=ISSUE_LABELS,
                   severity_labels=SEVERITY_LABELS,
                   sort_labels={k: label for k, (label, _) in REVIEW_SORTS.items()})
+
+
+# ── v1.2 상품 개선 조치 기록 (상품별 대시보드) — API(/api/v1/products/{id}/actions)와 같은 규칙
+def parse_iso_date(value: str) -> Optional[date]:
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
+@app.post("/products/{product_id}/actions", name="product_action_add")
+def product_action_add(request: Request,
+                       product_id: int,
+                       action_date: str = Form(""),
+                       title: str = Form(""),
+                       issue: str = Form(""),
+                       user: User = Depends(login_required),
+                       db: Session = Depends(get_session)):
+    product = db.get(Product, product_id)
+    if product is None or product.seller_id != user.id:
+        raise HTTPException(status_code=404)
+    title, when = title.strip(), parse_iso_date(action_date)
+    if problem := action_problem(title, when):
+        flash(request, problem, "error")
+    else:
+        db.add(ProductAction(product_id=product.id, action_date=when, title=title,
+                             issue_type=IssueType(issue) if issue in ISSUE_LABELS else None))
+        db.commit()
+        flash(request, f"개선 조치 '{title}'을(를) 기록했습니다. 조치 전후 리뷰를 비교해 보여 드립니다.")
+    return RedirectResponse(f"{request.url_for('product_dashboard', product_id=product_id)}#actions", status_code=303)
+
+
+@app.post("/products/{product_id}/actions/{action_id}/delete", name="product_action_delete")
+def product_action_delete(request: Request,
+                          product_id: int,
+                          action_id: int,
+                          user: User = Depends(login_required),
+                          db: Session = Depends(get_session)):
+    action = db.get(ProductAction, action_id)
+    if action is None or action.product_id != product_id or action.product.seller_id != user.id:
+        raise HTTPException(status_code=404)
+    db.delete(action)
+    db.commit()
+    flash(request, "개선 조치 기록을 삭제했습니다.")
+    return RedirectResponse(f"{request.url_for('product_dashboard', product_id=product_id)}#actions", status_code=303)
 
 
 # ──────────────────────────────────────────────
@@ -731,6 +823,8 @@ def review_list(request: Request,
                 period: str = "",
                 replied: str = "",
                 status: str = "",
+                mismatch: str = "",
+                memo: str = "",
                 page: str = "1",
                 user: User = Depends(login_required),
                 db: Session = Depends(get_session)):
@@ -744,6 +838,8 @@ def review_list(request: Request,
         "period": period if period in REVIEW_PERIODS else "",
         "replied": replied if replied in ("yes", "no") else "",
         "status": "BLINDED" if status == "BLINDED" else "",
+        "mismatch": "1" if mismatch == "1" else "",                          # v1.2 별점·내용 불일치
+        "memo": memo if memo in MEMO_STATUS_LABELS or memo == "NONE" else "",  # v1.2 내부 처리 상태
     })
 
     stmt = (select(Review).join(Review.product)
@@ -757,12 +853,18 @@ def review_list(request: Request,
         stmt = stmt.where(Review.reviewed_at >= date.today() - timedelta(days=int(filters["period"]) - 1))
     if filters["replied"]:
         stmt = stmt.where(Review.replies.any() if filters["replied"] == "yes" else ~Review.replies.any())
+    if filters["memo"] == "NONE":
+        stmt = stmt.where(~select(ReviewMemo.review_id).where(ReviewMemo.review_id == Review.id).exists())
+    elif filters["memo"]:
+        stmt = stmt.where(select(ReviewMemo.review_id).where(ReviewMemo.review_id == Review.id,
+                                                            ReviewMemo.status == MemoStatus(filters["memo"])).exists())
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     pages = max(1, -(-total // REVIEW_LIST_PAGE_SIZE))
     page = min(max(int(page) if page.isdigit() else 1, 1), pages)
     reviews = db.scalars(
-        stmt.options(selectinload(Review.analysis), selectinload(Review.product), selectinload(Review.replies))
+        stmt.options(selectinload(Review.analysis), selectinload(Review.product), selectinload(Review.replies),
+                     selectinload(Review.memo))
         .order_by(*REVIEW_SORTS[filters["sort"]][1]())
         .limit(REVIEW_LIST_PAGE_SIZE).offset((page - 1) * REVIEW_LIST_PAGE_SIZE)
     ).all()
@@ -771,8 +873,57 @@ def review_list(request: Request,
     return render(request, "reviews.html", active_menu="reviews", reviews=reviews, products=products,
                   filters=filters, active_filters=active_filters, total=total, page=page, pages=pages,
                   sentiment_labels=SENTIMENT_LABELS, issue_labels=ISSUE_LABELS, severity_labels=SEVERITY_LABELS,
-                  period_labels=REVIEW_PERIODS,
+                  period_labels=REVIEW_PERIODS, memo_labels=MEMO_STATUS_LABELS, memo_max=MEMO_MAX_LENGTH,
+                  current_url=str(request.url.path) + (f"?{request.url.query}" if request.url.query else ""),
                   sort_labels={k: label for k, (label, _) in REVIEW_SORTS.items()})
+
+
+# ── v1.2 리뷰 내부 메모 · 처리 상태 (리뷰 목록) — API(/api/v1/reviews/{id}/memo)와 같은 규칙
+MEMO_STATUS_LABELS = {"TODO": "확인 필요", "IN_PROGRESS": "처리 중", "DONE": "처리 완료"}
+MEMO_MAX_LENGTH = 1000
+
+
+def _safe_next(value: str, fallback: str) -> str:
+    """되돌아갈 주소는 우리 사이트의 리뷰 목록만 허용 (다른 사이트로 보내는 오픈 리다이렉트 방지)"""
+    return value if value.startswith("/reviews") and "//" not in value and "\\" not in value else fallback
+
+
+@app.post("/reviews/{review_id}/memo", name="review_memo_save")
+def review_memo_save(request: Request,
+                     review_id: int,
+                     status: str = Form("TODO"),
+                     memo: str = Form(""),
+                     next: str = Form(""),
+                     user: User = Depends(login_required),
+                     db: Session = Depends(get_session)):
+    review = _owned_review_or_404(db, user, review_id)
+    memo = memo.replace("\r\n", "\n").strip()
+    back = _safe_next(next, str(request.url_for("review_list")))
+    if status not in MEMO_STATUS_LABELS:
+        flash(request, "처리 상태를 선택해 주세요.", "error")
+    elif len(memo) > MEMO_MAX_LENGTH:
+        flash(request, f"메모는 {MEMO_MAX_LENGTH:,}자 이하로 입력해 주세요.", "error")
+    else:
+        row = review.memo or ReviewMemo(review_id=review.id)
+        row.status, row.memo, row.updated_by = MemoStatus(status), memo or None, user.id
+        db.add(row)
+        db.commit()
+        flash(request, f"리뷰 #{review.id} 상태를 '{MEMO_STATUS_LABELS[status]}'(으)로 저장했습니다.")
+    return RedirectResponse(f"{back}#review-{review_id}", status_code=303)
+
+
+@app.post("/reviews/{review_id}/memo/delete", name="review_memo_delete")
+def review_memo_delete(request: Request,
+                       review_id: int,
+                       next: str = Form(""),
+                       user: User = Depends(login_required),
+                       db: Session = Depends(get_session)):
+    review = _owned_review_or_404(db, user, review_id)
+    if review.memo is not None:
+        db.delete(review.memo)
+        db.commit()
+    flash(request, f"리뷰 #{review.id} 메모를 지웠습니다.")
+    return RedirectResponse(_safe_next(next, str(request.url_for("review_list"))), status_code=303)
 
 
 # ──────────────────────────────────────────────
@@ -988,6 +1139,33 @@ def reports_page(request: Request,
                   generated_at=datetime.now())
 
 
+# ──────────────────────────────────────────────
+# v1.2 리뷰 활용 (marketing.html) — 베스트 리뷰 · 강점 키워드 · 소개 문구
+# ──────────────────────────────────────────────
+@app.get("/marketing", name="marketing", response_class=HTMLResponse)
+def marketing_page(request: Request,
+                   product_id: str = "",
+                   user: User = Depends(login_required),
+                   db: Session = Depends(get_session)):
+    products = db.scalars(select(Product).where(Product.seller_id == user.id).order_by(Product.id)).all()
+    selected = next((p for p in products if str(p.id) == product_id), None)       # 남의 상품 ID 는 전체로
+    pid = selected.id if selected else None
+    return render(request, "marketing.html", active_menu="marketing", products=products, selected=selected,
+                  best=best_reviews(db, user.id, pid), strength=strengths(db, user.id, pid))
+
+
+# ──────────────────────────────────────────────
+# v1.2 도움말 (help.html) — 분석 기준·용어·업로드 형식 (숫자는 코드의 상수를 그대로 보여 줌)
+# ──────────────────────────────────────────────
+@app.get("/help", name="help_page", response_class=HTMLResponse)
+def help_page(request: Request, user: User = Depends(login_required)):
+    return render(request, "help.html", active_menu="help", risk_severity=RISK_SEVERITY,
+                  surge_days=SURGE_DAYS, surge_min=SURGE_MIN_COUNT, surge_ratio=SURGE_RATIO,
+                  overdue_days=OVERDUE_DAYS, mismatch_cues=MISMATCH_CUES, action_days=ACTION_WINDOW_DAYS,
+                  placeholders=TEMPLATE_PLACEHOLDERS, upload_mb=UPLOAD_MAX_BYTES // (1024 * 1024),
+                  upload_rows=UPLOAD_MAX_ROWS, sample_prefix=SAMPLE_PREFIX.strip())
+
+
 @app.get("/cschatbot", name="cschatbot", response_class=HTMLResponse)
 def cschatbot_page(request: Request,
                    user: User = Depends(login_required),
@@ -1092,7 +1270,7 @@ TEMPLATE_EXAMPLES = {
 
 def render_settings(request: Request, db: Session, user: User, status_code: int = 200) -> HTMLResponse:
     saved = seller_templates(db, user.id)
-    reply_templates = [{"sentiment": p.value, "label": SENTIMENT_LABELS[p], "example": TEMPLATE_EXAMPLES[p],
+    reply_templates = [{"sentiment": p.value, "label": TEMPLATE_LABELS[p], "example": TEMPLATE_EXAMPLES[p],
                         "content": saved[p].content if p in saved else ""}
                        for p in (Polarity.NEG, Polarity.NEU, Polarity.POS)]
     return render(request, "informationedit.html", status_code=status_code, active_menu="settings",
@@ -1257,7 +1435,7 @@ def reply_template_save(request: Request,
         template.content = content
         db.add(template)
         db.commit()
-        flash(request, f"{SENTIMENT_LABELS[polarity]} 리뷰 답글 템플릿을 저장했습니다. CS챗봇 초안에 바로 적용됩니다.")
+        flash(request, f"{TEMPLATE_LABELS[polarity]} 리뷰 답글 템플릿을 저장했습니다. CS챗봇 초안에 바로 적용됩니다.")
     return RedirectResponse(f"{request.url_for('settings')}#reply-templates", status_code=303)
 
 
@@ -1274,7 +1452,7 @@ def reply_template_reset(request: Request,
         if template is not None:
             db.delete(template)
             db.commit()
-        flash(request, f"{SENTIMENT_LABELS[polarity]} 리뷰 답글을 기본 초안으로 되돌렸습니다.")
+        flash(request, f"{TEMPLATE_LABELS[polarity]} 리뷰 답글을 기본 초안으로 되돌렸습니다.")
     return RedirectResponse(f"{request.url_for('settings')}#reply-templates", status_code=303)
 
 

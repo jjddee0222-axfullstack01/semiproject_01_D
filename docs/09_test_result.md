@@ -13,11 +13,11 @@
 
 | 구분 | 결과 |
 |---|---|
-| 자동 테스트 | **379개 중 379개 통과** (실패 0, 건너뜀 0) — v1.0.0 347개 + v1.1 32개 (2026-10-27, 2장 마지막 문단) |
+| 자동 테스트 | **415개 중 415개 통과** (실패 0, 건너뜀 0) — v1.0.0 347개 + v1.1 32개 + v1.2 36개 (2026-10-27, 2장 마지막 문단) |
 | 사용자 시나리오 | **12개 중 12개 통과** (S-01 \~ S-12, 9일차 코드로 다시 실행. S-01 로그아웃은 사이드바 버튼(POST)으로) |
 | Must 기능(FR-01\~08) 정상 동작률 | **100%** |
 | MariaDB 호환 | 테스트 중 실행된 SQL 33,657건을 MariaDB 방언으로 생성 → 오류 0건 |
-| 발견·해결한 문제 | 35건 (높음 6, 중간 15, 낮음 14) — 모두 해결 (v1.1 정리 I-34·I-35 포함) |
+| 발견·해결한 문제 | 35건 (높음 6, 중간 15, 낮음 14) — 모두 해결 (v1.1 정리 I-34·I-35 포함). v1.2 의 알려진 한계 3건은 08 '남은 위험' |
 | 배포 환경 | Railway + MariaDB 11 에서 서버 시작·DB 연결 확인 (2026-10-20, 6장) |
 | 정적 점검 (Dead Code·중복 코드) | 쓰이지 않는 코드 1건 삭제, 중복 2곳 확인 (5장) |
 
@@ -25,14 +25,14 @@
 
 ```
 cd backend && python -m pytest
-379 passed
+415 passed
 ```
 
 | 단계 | 테스트 수 | 결과 |
 |---|---|---|
 | 단위 (`-m unit`) | 55 | 통과 |
-| API (`-m api`) | 85 | 통과 |
-| 화면·통합 (`-m pages`) | 228 | 통과 |
+| API (`-m api`) | 101 | 통과 |
+| 화면·통합 (`-m pages`) | 248 | 통과 |
 | DB 모델 (`test_models.py`) | 11 | 통과 |
 
 | 파일 | 수 | 파일 | 수 |
@@ -40,7 +40,7 @@ cd backend && python -m pytest
 | `test_unit.py` | 24 | `test_pages.py` | 28 |
 | `test_schemas.py` | 25 | `test_pages_analysis_cs.py` | 20 |
 | `test_models.py` | 11 | `test_pages_day6.py` | 21 |
-| `test_mariadb_sql.py` (17개 테이블) | 3 | `test_pages_upload.py` | 15 |
+| `test_mariadb_sql.py` (19개 테이블) | 3 | `test_pages_upload.py` | 17 |
 | `test_api_auth.py` | 10 | `test_pages_review_filter.py` | 13 |
 | `test_api_products_reviews.py` | 19 | `test_pages_password_reset.py` | 13 |
 | `test_api_replies.py` | 4 | `test_pages_email_verify.py` | 12 |
@@ -50,8 +50,9 @@ cd backend && python -m pytest
 | `test_api_internal.py` | 9 | `test_review_fixes.py` | 23 |
 | `test_agent_task_day8.py` | 13 | `test_day9_fixes.py` | 12 |
 | `test_api_v11_alerts_templates.py` (v1.1) | 22 | `test_pages_v11_reports.py` (v1.1) | 5 |
-| `test_migrations.py` (v1.1) | 3 | | |
-| | | **합계** | **379** |
+| `test_migrations.py` (v1.1) | 3 | `test_api_v12_seller_tools.py` (v1.2) | 16 |
+| `test_pages_v12_seller_tools.py` (v1.2) | 18 | | |
+| | | **합계** | **415** |
 
 **회귀 확인:** 7일차 1차 점검 수정 전 276개 → 수정 후 298개 (새 테스트 22개). 중립 분류 도입으로 실패한 기존 테스트 9건은 오류가 아니라 의도한 숫자 변화라서 기대값을 새 규칙에 맞춰 고쳤습니다 (예: 데모 데이터 부정 비율 0.5455 → 0.2727, 상품 A 부정 리뷰 3 → 1).
 
@@ -67,6 +68,7 @@ cd backend && python -m pytest
 - 알림·급증·템플릿 `test_api_v11_alerts_templates.py` 22개: 알림 설정 API·화면, 업로드 후 위험 리뷰 안내, 메일 발송(개발 모드 콘솔·SMTP 설정 시 발송·발송 실패해도 업로드 정상·중복 업로드 재알림 없음·작성자 이름 가림), 탈퇴 시 설정 삭제, 급증 감지(×3 / 블라인드·다른 셀러 제외 / 기준 미달), 템플릿 CRUD·검증(알 수 없는 자리 표시자·2,000자·빈 값)·소유권·답글 추천과 CS챗봇 적용
 - 리포트 `test_pages_v11_reports.py` 5개: 로그인 필요, 주간 기본·월간·잘못된 기간, 지표 계산(전기간 대비), 블라인드·다른 셀러 제외
 - 기존 테스트 변경: `test_mariadb_sql.py` 의 테이블 수 15 → 17 (새 테이블 2개, 기대값만 변경)
+- (v1.2 고도화) 379개 → 415개 (+36): `test_api_v12_seller_tools.py` 16개(개인정보 가리기 5가지 + 원문 보존, 조치 효과 계산·판단 보류·소유권·입력 검증, 상세페이지 보완, 불일치 수, 메모 CRUD·검증·소유권, 응답 시간·3일 방치 위험 리뷰, 베스트 리뷰·강점, 신고 자료 CSV), `test_pages_v12_seller_tools.py` 18개(엑셀 업로드 — 직접 만든 .xlsx 와 openpyxl 로 만든 실제 엑셀 파일, 쇼핑몰 열 이름·날짜 형식, 상품별 대시보드 조치·차트 표시선, 불일치 필터, 메모 화면·외부 주소 리다이렉트 차단, 시작 안내·샘플 넣기/지우기, 리뷰 활용·도움말·사이드바, 화면 6곳 연락처 가림), 업로드 오류 테스트 +2(.xls·.txt). 기존 테스트 변경: `.xlsx` 를 받게 되어 업로드 거부 문구 2곳, 테이블 수 17 → 19, 마이그레이션 버전 0002 → 0003 (모두 기대값만 변경)
 - CI: `.github/workflows/tests.yml` 이 push·PR 마다 SQLite 전체 + MariaDB 11 컨테이너(마이그레이션 `upgrade → current → downgrade` 후 전체, 모델 일치 검사 `alembic check` 는 SQLite job 의 `test_migrations.py`)를 실행
 
 ## 3. 사용자 시나리오
@@ -103,6 +105,11 @@ cd backend && python -m pytest
 | FR-29 부정 키워드 급증 (v1.1) | `test_api_v11_alerts_templates.py` (keyword_surge) | 통과 |
 | FR-30 주간·월간 리포트 (v1.1) | `test_pages_v11_reports.py`, 인쇄 미리보기(A4 PDF 2쪽) 확인 | 통과 |
 | FR-31 답글 템플릿 (v1.1) | `test_api_v11_alerts_templates.py` (reply_template·cschatbot) | 통과 |
+| FR-32\~34 조치 효과·상세페이지 보완·불일치 (v1.2) | `test_api_v12_seller_tools.py`, `test_pages_v12_seller_tools.py` | 통과 |
+| FR-35\~37 응답 시간·메모·신고 자료 (v1.2) | `test_api_v12_seller_tools.py`, `test_pages_v12_seller_tools.py` | 통과 |
+| FR-38 리뷰 활용 (v1.2) | `test_api_v12_seller_tools.py` (best_reviews·strengths), `test_marketing_page` | 통과 |
+| FR-39\~41 엑셀·쇼핑몰 파일, 시작 안내·샘플, 도움말 (v1.2) | `test_pages_v12_seller_tools.py`, `test_pages_upload.py` | 통과 |
+| FR-42 개인정보 가리기 (v1.2) | `test_mask_pii`, `test_api_review_content_is_masked_but_db_keeps_original`, `test_pii_masked_on_pages` | 통과 |
 | NFR-01\~11 보안·품질 | `test_security_limits.py`, `test_review_fixes.py`, `test_unit.py`, `test_models.py`, S-02·S-12 | 통과 |
 
 ## 5. 정적 점검 (9일차 기준: Dead Code·중복 코드 탐색)

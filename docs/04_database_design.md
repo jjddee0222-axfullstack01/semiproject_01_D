@@ -144,6 +144,21 @@ erDiagram
         text content
         datetime updated_at
     }
+    product_actions {
+        bigint id PK
+        bigint product_id FK
+        date action_date
+        varchar title
+        enum issue_type
+        datetime created_at
+    }
+    review_memos {
+        bigint review_id PK,FK
+        enum status
+        text memo
+        bigint updated_by FK
+        datetime updated_at
+    }
     keywords ||--o{ review_keywords : "keyword_id"
     products ||--o{ product_monthly_stats : "product_id"
     products ||--o{ reviews : "product_id"
@@ -163,11 +178,14 @@ erDiagram
     users ||--o{ shop_monthly_stats : "seller_id"
     users ||--o| notification_settings : "seller_id"
     users ||--o{ reply_templates : "seller_id"
+    products ||--o{ product_actions : "product_id"
+    reviews ||--o| review_memos : "review_id"
+    users ||--o{ review_memos : "updated_by"
 ```
 
-**3일차 검증 질문에 대한 답:** 테이블 15개 (v1.1 에서 2개 추가 → 17개, 아래 1장) · 각 테이블의 PK 는 아래 1장 · 관계는 2장 · Frontend 가 부르는 API 는 `03_ui_design.md` 5장 · Backend 가 돌려주는 데이터는 `05_api_spec.md` 응답 예시
+**3일차 검증 질문에 대한 답:** 테이블 15개 (v1.1 에서 2개, v1.2 에서 2개 추가 → 19개, 아래 1장) · 각 테이블의 PK 는 아래 1장 · 관계는 2장 · Frontend 가 부르는 API 는 `03_ui_design.md` 5장 · Backend 가 돌려주는 데이터는 `05_api_spec.md` 응답 예시
 
-## 1. 테이블 목록 (17개 = v1.0.0 15개 + v1.1 2개)
+## 1. 테이블 목록 (19개 = v1.0.0 15개 + v1.1 2개 + v1.2 2개)
 
 | 구분 | 테이블 | 설명 | 기본키(PK) | 외래키(FK) · 고유(UNIQUE) |
 |---|---|---|---|---|
@@ -188,6 +206,8 @@ erDiagram
 | 기타 | `feedbacks` | '의견 보내기' 내용 | id | user_id → users (SET NULL) |
 | 설정 (v1.1) | `notification_settings` | 셀러 알림 설정. `risk_email` = 업로드 후 위험 리뷰 메일 (행이 없으면 꺼짐) | seller_id | seller_id → users (CASCADE) |
 | 설정 (v1.1) | `reply_templates` | 셀러가 쓴 답글 템플릿. 감성(POS/NEU/NEG)마다 1개, 없으면 기본 초안 | id | seller_id → users (CASCADE) · UNIQUE (seller_id, sentiment) |
+| 상품 (v1.2) | `product_actions` | 셀러가 상품에 한 개선 조치 (조치일·내용·대상 이슈) → 조치 전후 리뷰 비교 | id | product_id → products (CASCADE) · INDEX (product_id, action_date) |
+| CS (v1.2) | `review_memos` | 리뷰 1건당 내부 메모·처리 상태(TODO / IN_PROGRESS / DONE) | review_id | review_id → reviews (CASCADE) · updated_by → users (SET NULL) |
 
 ## 2. 관계
 
@@ -203,6 +223,8 @@ erDiagram
 | users / products — *_monthly_stats | 1 : N | 월마다 1행 |
 | users — notification_settings | 1 : 0..1 | (v1.1) 셀러마다 알림 설정 최대 1행 |
 | users — reply_templates | 1 : N (최대 3) | (v1.1) 감성별 템플릿 1개씩 |
+| products — product_actions | 1 : N | (v1.2) 상품마다 여러 개선 조치 |
+| reviews — review_memos | 1 : 0..1 | (v1.2) 리뷰마다 내부 메모 최대 1개 |
 
 ## 3. 설계 규칙 (06_architecture.md 의 결정과 같음)
 
@@ -210,5 +232,5 @@ erDiagram
 - **탈퇴 = 하드 삭제 (D5)**: `users` 행을 삭제. 외래키 규칙에 따라 세션·상품(→ 리뷰·분석·키워드 연결·답글·블라인드 이력)·위험 키워드·월별 통계는 `CASCADE` 로 함께 삭제, `feedbacks.user_id` 등은 `SET NULL`. 공용 키워드 사전(`keywords`)은 유지. 행이 사라지므로 같은 이메일·사업자번호로 재가입 가능 (UNIQUE 유지)
 - **소유권**: 상품·리뷰·답글·위험 키워드는 `products.seller_id` 가 로그인한 셀러인 것만 접근 (API 403, 화면 404)
 - **재분석 범위 식별**: `review_analysis.model_version` (지금은 `rule-v2`: 위험 키워드 없는 3점 리뷰를 중립으로 분류. 서버를 켤 때 예전 버전 결과는 자동 재분석)
-- **스키마 변경 = Alembic (v1.1)**: `backend/migrations/` 에 버전별 변경을 기록 (`0001` v1.0.0 15개, `0002` v1.1 2개). 서버 시작 시 `create_all` 도 그대로 동작하므로, 마이그레이션은 이미 있는 테이블을 건너뛰도록 작성 → 기존 DB 에서도 `python -m alembic upgrade head` 한 번이면 버전 기록이 생김. 모델과 마이그레이션이 어긋나면 `alembic check` 가 실패 (CI·`test_migrations.py`)
+- **스키마 변경 = Alembic (v1.1)**: `backend/migrations/` 에 버전별 변경을 기록 (`0001` v1.0.0 15개, `0002` v1.1 2개, `0003` v1.2 2개). 서버 시작 시 `create_all` 도 그대로 동작하므로, 마이그레이션은 이미 있는 테이블을 건너뛰도록 작성 → 기존 DB 에서도 `python -m alembic upgrade head` 한 번이면 버전 기록이 생김. 모델과 마이그레이션이 어긋나면 `alembic check` 가 실패 (CI·`test_migrations.py`)
 - **임베딩 (D6)**: `products.description_embedding`, `reviews.content_embedding` JSON 컬럼 (현재 미사용, 컬럼만 유지)

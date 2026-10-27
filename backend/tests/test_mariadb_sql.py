@@ -18,7 +18,7 @@ def _ddl():
 
 def test_all_tables_innodb_utf8mb4():
     tables = _ddl()
-    assert len(tables) == len(m.Base.metadata.tables) == 17     # v1.0.0 15개 + v1.1 2개 (notification_settings, reply_templates)
+    assert len(tables) == len(m.Base.metadata.tables) == 19     # v1.0.0 15 + v1.1 2 (notification_settings, reply_templates) + v1.2 2 (product_actions, review_memos)
     for ddl in tables:
         assert "ENGINE=InnoDB" in ddl and "CHARSET=utf8mb4" in ddl, ddl[:80]
 

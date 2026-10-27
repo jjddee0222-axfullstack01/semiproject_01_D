@@ -219,3 +219,30 @@ CREATE TABLE reply_templates (
 	CONSTRAINT uq_reply_templates_seller_sentiment UNIQUE (seller_id, sentiment), 
 	FOREIGN KEY(seller_id) REFERENCES users (id) ON DELETE CASCADE
 )ENGINE=InnoDB CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+
+-- ── v1.2 추가 (migrations/versions/0003_v1_2_actions_memos.py) ──
+
+CREATE TABLE product_actions (
+	id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, 
+	product_id BIGINT UNSIGNED NOT NULL, 
+	action_date DATE NOT NULL, 
+	title VARCHAR(200) NOT NULL, 
+	issue_type ENUM('PRODUCT','DELIVERY','PACKAGING','ETC'), 
+	created_at DATETIME NOT NULL DEFAULT now(), 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(product_id) REFERENCES products (id) ON DELETE CASCADE
+)ENGINE=InnoDB CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE INDEX ix_product_actions_product_date ON product_actions (product_id, action_date);
+
+CREATE TABLE review_memos (
+	review_id BIGINT UNSIGNED NOT NULL, 
+	status ENUM('TODO','IN_PROGRESS','DONE') NOT NULL DEFAULT 'TODO', 
+	memo TEXT, 
+	updated_by BIGINT UNSIGNED, 
+	updated_at DATETIME NOT NULL DEFAULT now(), 
+	PRIMARY KEY (review_id), 
+	FOREIGN KEY(review_id) REFERENCES reviews (id) ON DELETE CASCADE, 
+	FOREIGN KEY(updated_by) REFERENCES users (id) ON DELETE SET NULL
+)ENGINE=InnoDB CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;

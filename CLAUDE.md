@@ -13,6 +13,7 @@ AI 에이전트(Claude Code 등)에게 작업을 맡길 때 이 파일을 먼저
 - 실제 MariaDB 전체 테스트 통과 (2026-10-21, MariaDB 11.4.3, `TEST_DATABASE_URL` 로 `pinpoint_test` 지정, I-33)
 - 남은 일: 발표, `v1.0.0` 태그
 - **v1.1 (2026-10-27, `feature/upgrade-v1.1`)**: GitHub Actions CI, Alembic, 옛 `/api/reviews` 삭제, 위험 리뷰 알림 메일(FR-28), 부정 키워드 급증(FR-29), 주간·월간 리포트 `/reports`(FR-30), 셀러 답글 템플릿(FR-31). 테이블 17개, API 41개, 테스트 379개
+- **v1.2 (2026-10-27, 같은 브랜치)**: 개선 조치 기록·효과, 상세페이지 보완, 별점·내용 불일치, 답글 응답 시간, 리뷰 메모·처리 상태, 블라인드 신고 자료, 리뷰 활용 `/marketing`, 엑셀·쇼핑몰 파일 업로드, 시작 안내·샘플, 도움말 `/help`, 연락처 가리기 (FR-32\~42). 테이블 19개, API 53개, 테스트 415개
 - 분석은 규칙 기반(`analysis.py`, `rule-v2`). LLM·모델 학습은 이번 범위 제외
 
 ## 폴더 구조
@@ -20,6 +21,7 @@ AI 에이전트(Claude Code 등)에게 작업을 맡길 때 이 파일을 먼저
 backend/        실제 서버 — main.py(화면 라우트) · api_v1.py(REST /api/v1) · models.py · schemas.py · analysis.py
                 pipeline.py(CSV 적재) · email_verify.py · rate_limit.py · templates/(화면) · tests/(pytest)
                 alerts.py(알림 메일) · insights.py(급증·리포트) · migrations/(Alembic)
+                seller_tools.py(셀러 도구) · privacy.py(연락처 가리기) · onboarding.py(샘플 데이터)
 .github/        workflows/tests.yml (push·PR 자동 테스트: SQLite + MariaDB)
 frontend/       디자인 시안 (서버에서 사용 안 함)
 docs/           01~11 기획·설계·테스트·배포 문서
@@ -35,12 +37,14 @@ docs/           01~11 기획·설계·테스트·배포 문서
 - 테이블 `backend/models.py` · 요청/응답 형식 `backend/schemas.py`
 - 분석 규칙 `backend/analysis.py` · 추천 답글·셀러 답글 템플릿 `backend/reply_drafts.py`
 - 위험 리뷰 알림 `backend/alerts.py` · 키워드 급증·리포트 `backend/insights.py`
+- 조치 효과·상세페이지 보완·불일치·응답 시간·베스트 리뷰 `backend/seller_tools.py` · 연락처 가리기 `backend/privacy.py`
 - 이메일 인증 코드 `backend/email_verify.py` · 시도 횟수 제한 `backend/rate_limit.py` · CSV 적재 `backend/pipeline.py`
 - 새 화면 템플릿은 `{% include '_layout_styles.html' %}` + `{% include '_sidebar.html' %}` 로 공통 스타일·모바일 메뉴 사용
 
 ## 반드시 지킬 것
 - 셀러는 **자기 상품의 데이터만** 접근 (API 403 / 화면 404). 새 기능에도 소유권 검사 필수
 - 통계·키워드·CSV 등 집계는 **`status = 'VISIBLE'` 리뷰만** (블라인드 제외)
+- 리뷰 본문을 화면·API·CSV·메일로 보여 줄 때는 연락처를 가림: 템플릿 `{{ r.content_raw|pii }}`, 응답 스키마는 `field_serializer`, 그 밖은 `privacy.mask_pii()`. DB 원문은 바꾸지 않음
 - API 오류 응답은 `{code, message}` 형식
 - 기존 API URL·DB 구조(테이블·컬럼) 임의 변경 금지. 필요하면 먼저 사람에게 확인
 - DB 를 바꿀 때(사람 확인 후)는 `models.py` 수정 + Alembic 마이그레이션 추가 (`cd backend && python -m alembic revision --autogenerate -m "설명"`). 서버의 `create_all` 과 함께 쓰므로 새 테이블 생성은 '이미 있으면 건너뛰기'로 작성 (`migrations/versions/0002_*.py` 참고). `tests/test_migrations.py`·`test_mariadb_sql.py` 의 테이블 수도 함께 갱신
@@ -57,7 +61,7 @@ cd backend
 python -m pytest            # 전체 (임시 SQLite, 실제 DB 는 건드리지 않음)
 python -m pytest -m pages   # 화면만 / -m api : API 만 / -m unit : 단위
 ```
-DB 는 `backend/models.py`(테이블 17개, 변경 이력은 `backend/migrations/`), API 규칙은 `docs/05_api_spec.md`, 화면은 `docs/03_ui_design.md` 참고
+DB 는 `backend/models.py`(테이블 19개, 변경 이력은 `backend/migrations/`), API 규칙은 `docs/05_api_spec.md`, 화면은 `docs/03_ui_design.md` 참고
 
 ## Agent 에게 작업을 맡길 때 (일정표 19장: Context → Task → Constraints → Done Criteria → Test)
 아래 형식으로 지시하고, 결과는 `docs/11_final_report.md` 부록 A 에 기록합니다.

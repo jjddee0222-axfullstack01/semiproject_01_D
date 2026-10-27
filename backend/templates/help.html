@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIN POINT REVIEW - 도움말</title>
+    {% include '_layout_styles.html' %}
+    <style>
+        /* v1.2 도움말: 분석 기준·용어·업로드 형식. 숫자는 서버 코드의 기준값을 그대로 표시 */
+        .help-toc { display: flex; flex-wrap: wrap; gap: 6px; }
+        .help-toc a { padding: 6px 12px; border-radius: 16px; background: #F1F3F5; color: #333333; font-size: 12px; text-decoration: none; }
+        .help-toc a:hover { background: #E9ECEF; }
+        .help-section { scroll-margin-top: 20px; }
+        .help-section p, .help-section li { font-size: 13px; line-height: 1.8; color: #333333; }
+        .help-section ul { margin: 6px 0 0 18px; }
+        .help-section code { padding: 1px 6px; border-radius: 4px; background: #F1F3F5; font-size: 12px; }
+        .help-table { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 13px; }
+        .help-table th, .help-table td { padding: 8px; border-bottom: 1px solid #F1F3F5; text-align: left; vertical-align: top; }
+        .help-table th { width: 160px; color: #868E96; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    {% include '_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="page-title-area">
+            <h1 class="page-title">도움말</h1>
+            <span class="page-guide">화면에 나오는 숫자가 어떤 기준으로 계산되는지 정리했습니다.</span>
+        </div>
+
+        <div class="card">
+            <nav class="help-toc" aria-label="도움말 목차">
+                <a href="#start">처음 시작하기</a><a href="#upload">업로드 형식</a><a href="#sentiment">감성 분류</a>
+                <a href="#risk">위험 리뷰·심각도</a><a href="#surge">키워드 급증</a><a href="#mismatch">별점·내용 불일치</a>
+                <a href="#response">답글 응답 시간</a><a href="#actions">개선 조치 효과</a><a href="#templates">답글 템플릿</a>
+                <a href="#privacy">개인정보 가리기</a><a href="#blind">블라인드·신고 자료</a>
+            </nav>
+        </div>
+
+        <div class="card help-section" id="start">
+            <div class="card-title">처음 시작하기</div>
+            <ul>
+                <li>상품 조회 화면에서 리뷰 파일(CSV·엑셀)을 올리면 상품이 자동으로 만들어지고 리뷰가 분석됩니다.</li>
+                <li>먼저 둘러보고 싶다면 대시보드의 <b>샘플 데이터로 먼저 체험하기</b>를 누르세요. 샘플 상품은 이름이 <code>{{ sample_prefix }}</code>로 시작하고, 대시보드에서 한 번에 지울 수 있습니다.</li>
+                <li>매일 할 일: 대시보드 '처리할 일' → CS챗봇에서 위험 리뷰 답글 → 리뷰 목록에서 내부 메모로 처리 상태 기록.</li>
+            </ul>
+        </div>
+
+        <div class="card help-section" id="upload">
+            <div class="card-title">업로드 형식</div>
+            <table class="help-table">
+                <tr><th>파일</th><td>CSV(UTF-8 또는 엑셀 한글 CP949), 엑셀 <code>.xlsx</code> (첫 번째 시트). 예전 형식 <code>.xls</code> 는 엑셀에서 .xlsx 로 다시 저장해 주세요.</td></tr>
+                <tr><th>크기</th><td>한 번에 {{ upload_mb }}MB, {{ "{:,}".format(upload_rows) }}행까지</td></tr>
+                <tr><th>필수 열</th><td>상품명 · 평점(1~5 정수) · 리뷰내용 · 작성일 — 선택: 카테고리, 작성자, 상품설명</td></tr>
+                <tr><th>쇼핑몰 파일</th><td>스마트스토어·쿠팡에서 내려받은 리뷰 파일의 열 이름(예: <code>구매자평점</code>, <code>리뷰상세내용</code>, <code>리뷰등록일</code>, <code>등록자</code>)도 자동으로 알아봅니다. 열 이름이 달라 실패하면 오류 안내의 필수 열 이름으로 바꿔 올려 주세요.</td></tr>
+                <tr><th>건너뛰는 행</th><td>필수값이 없거나 형식이 틀린 행, 미래 날짜, 이미 올린 같은 리뷰(상품·작성자·작성일·내용이 모두 같음)</td></tr>
+            </table>
+        </div>
+
+        <div class="card help-section" id="sentiment">
+            <div class="card-title">감성 분류 (긍정·중립·부정)</div>
+            <ul>
+                <li>평점 4~5점이고 위험 키워드가 없으면 <b>긍정</b>, 위험 키워드가 없는 3점은 <b>중립</b>, 그 외(1~2점 또는 위험 키워드 포함)는 <b>부정</b>입니다.</li>
+                <li>부정 리뷰에는 이슈 유형(상품·배송·포장·기타)이 붙습니다. 규칙 기반이라 반어법·문맥은 판단하지 못합니다.</li>
+            </ul>
+        </div>
+
+        <div class="card help-section" id="risk">
+            <div class="card-title">위험 리뷰 · 심각도</div>
+            <ul>
+                <li>심각도는 0(정상)·1(주의)·2(위험)·3(심각) 네 단계이며, <b>{{ risk_severity }} 이상</b>이면 '위험 리뷰'로 대시보드·CS챗봇 위쪽에 보입니다.</li>
+                <li>평점 1~2점 리뷰, 또는 설정의 <b>위험 키워드</b>(예: 환불, 파손, 사기)가 들어간 리뷰가 위험 리뷰가 됩니다. 위험도 3인 단어는 하나만 있어도 '심각'입니다.</li>
+                <li>위험 키워드를 추가·삭제하면 그 단어가 들어간 기존 리뷰에 바로 반영됩니다.</li>
+            </ul>
+        </div>
+
+        <div class="card help-section" id="surge">
+            <div class="card-title">부정 키워드 급증</div>
+            <p>최근 {{ surge_days }}일(오늘 포함)에 <b>{{ surge_min }}건 이상</b> 나오고, 그 전 {{ surge_days }}일보다 <b>{{ surge_ratio|int }}배 이상</b> 늘었거나 새로 나온 부정 키워드입니다. 블라인드한 리뷰는 세지 않습니다.</p>
+        </div>
+
+        <div class="card help-section" id="mismatch">
+            <div class="card-title">별점·내용 불일치</div>
+            <p>평점은 4~5점인데 부정으로 분석됐거나, 다음 표현이 들어간 리뷰입니다: {% for w in mismatch_cues %}<code>{{ w }}</code> {% endfor %}
+               — 평균 평점에 가려 놓치기 쉬운 불만을 찾을 때 리뷰 목록의 '별점·내용 불일치' 필터를 쓰세요.</p>
+        </div>
+
+        <div class="card help-section" id="response">
+            <div class="card-title">답글 응답 시간</div>
+            <ul>
+                <li>리뷰가 <b>이 서비스에 들어온 시각</b>(업로드 시각)부터 첫 답글(CS챗봇 '처리 완료' 포함)까지의 시간입니다. 예전 리뷰를 한꺼번에 올려도 응답 시간이 부풀지 않도록 리뷰 작성일이 아닌 업로드 시각을 씁니다.</li>
+                <li>들어온 지 {{ overdue_days }}일이 지나도 답글이 없는 위험 리뷰는 대시보드에 경고로 보입니다.</li>
+            </ul>
+        </div>
+
+        <div class="card help-section" id="actions">
+            <div class="card-title">개선 조치 효과</div>
+            <p>상품별 대시보드에서 조치(예: 포장 교체)를 기록하면 조치일 전과 후 <b>같은 길이의 기간</b>(최대 {{ action_days }}일)의 리뷰를 비교합니다.
+               고르신 이슈(없으면 부정 리뷰 전체)의 비율이 5%p 이상 줄면 '효과가 있어 보입니다'로 표시합니다. 조치 후 리뷰가 3건보다 적으면 판단을 미룹니다.
+               리뷰 수가 적으면 우연일 수 있으니 참고 자료로 봐 주세요.</p>
+        </div>
+
+        <div class="card help-section" id="templates">
+            <div class="card-title">답글 템플릿</div>
+            <p>설정 → 답글 템플릿에서 긍정·중립·부정 리뷰별 답글 말투를 정할 수 있습니다. 쓸 수 있는 자리 표시자:
+               {% for p in placeholders %}<code>{{ p }}</code> {% endfor %} — <code>{기본 답글}</code> 자리에는 리뷰 내용에 맞춘 기본 초안이 들어갑니다.</p>
+        </div>
+
+        <div class="card help-section" id="privacy">
+            <div class="card-title">개인정보 가리기</div>
+            <p>리뷰 속 휴대폰·전화번호와 이메일은 화면, API 응답, 리뷰 CSV, 알림 메일에서 <code>010-****-****</code>, <code>a**@naver.com</code> 처럼 가려서 보여 줍니다.
+               원문은 그대로 보관되며, 플랫폼 신고에 쓰는 '블라인드 신고 자료'만 원문 그대로 내려받습니다.</p>
+        </div>
+
+        <div class="card help-section" id="blind">
+            <div class="card-title">블라인드 · 신고 자료</div>
+            <p>블라인드는 이 서비스 안의 통계·목록에서만 리뷰를 숨깁니다. 쇼핑몰에서도 내리려면 리뷰 목록 → '블라인드된 리뷰' 탭 → <b>신고 자료 내려받기</b>로 받은 CSV(리뷰 원문·사유·처리 이력)를 각 쇼핑몰의 리뷰 신고 절차에 첨부하세요.</p>
+        </div>
+    </main>
+
+</body>
+</html>

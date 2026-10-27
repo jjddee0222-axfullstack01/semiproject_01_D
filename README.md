@@ -22,16 +22,18 @@
 | 로그인 / 회원가입 | `/login`, `/signup` | 세션 쿠키 로그인(5회 실패 시 10분 잠금), 사업자번호·이메일 중복 확인, **이메일 인증 코드** |
 | 비밀번호 변경하기 | `/password-reset` | 이름·이메일(인증 코드)·사업자 등록번호가 일치하면 새 비밀번호 설정 (5회 실패 시 10분 잠금) |
 | 회원 탈퇴 완료 | `/withdrawn` | 탈퇴 직후 안내, 처음으로 돌아가기 |
-| 대시보드 | `/dashboard` | **처리할 일**(미답변 위험 리뷰·최근 부정 리뷰·업로드), 위험 리뷰 건수, **급증한 부정 키워드**(v1.1), 최근 리뷰, 당월 방문자·구매자 |
-| 상품 조회 | `/products` | **리뷰 CSV 업로드**(양식 내려받기, 새 위험 리뷰 안내·알림 메일), 상품 목록·검색, 평균 평점, 긍정/중립/부정/위험 리뷰 수 |
+| 대시보드 | `/dashboard` | **처리할 일**(미답변 위험 리뷰·최근 부정 리뷰·업로드), 위험 리뷰 건수, **급증한 부정 키워드**(v1.1), **답글 응답 시간**(v1.2), 최근 리뷰, 당월 방문자·구매자. 상품이 없으면 **시작 안내·샘플 데이터 체험**(v1.2) |
+| 상품 조회 | `/products` | **리뷰 CSV·엑셀(.xlsx) 업로드**(스마트스토어·쿠팡 파일 열 이름 자동 인식, 양식 내려받기, 새 위험 리뷰 안내·알림 메일), 상품 목록·검색, 평균 평점, 긍정/중립/부정/위험 리뷰 수 |
 | 업로드 이력 | `/products/uploads` | CSV 업로드 기록 (추가·중복·오류 건수) |
-| 리뷰 목록 | `/reviews` | 모든 상품의 리뷰를 상품·기간·감성·이슈·평점·답글 여부·블라인드·검색어로 찾기 |
+| 리뷰 목록 | `/reviews` | 모든 상품의 리뷰를 상품·기간·감성·이슈·평점·답글 여부·블라인드·검색어로 찾기, (v1.2) **내부 메모·처리 상태**, **별점·내용 불일치** 필터, 블라인드 **신고 자료 내려받기** |
 | 상품 비교 | `/compare` | 두 상품의 평점·긍정/중립/부정 비율·이슈 유형·키워드 비교 |
-| 상품별 대시보드 | `/products/{id}` | 상세 리뷰, **리뷰 블라인드·복구**, 월별 리뷰 추이 차트, 긍정·부정 요약 |
+| 상품별 대시보드 | `/products/{id}` | 상세 리뷰, **리뷰 블라인드·복구**, 월별 리뷰 추이 차트, 긍정·부정 요약, (v1.2) **개선 조치 기록·전후 효과**, **상세페이지 보완 포인트** |
 | 쇼핑몰 분석 | `/analysis` | 전월 대비 구매율, **월별 추이·긍/부정 비율·키워드 TOP 10 차트**, CSV 내보내기, AI 분석 리포트 |
 | 리포트 (v1.1) | `/reports` | **주간·월간 리포트** (전기간 대비 지표, 감성·이슈·키워드·상품별·위험 리뷰), 'PDF로 저장'(브라우저 인쇄) |
+| 리뷰 활용 (v1.2) | `/marketing` | **베스트 리뷰**·강점 키워드·소개 문구 (복사) |
 | CS챗봇 | `/cschatbot` | 답글 없는 리뷰 + 추천 답글(내 **답글 템플릿** 적용) 수정·복사·처리 완료 |
 | 설정 | `/settings` | 회원정보 수정·탈퇴, **위험 키워드 관리**(추가·삭제 즉시 기존 리뷰에 반영), 전체 리뷰 재분석, **알림 설정·답글 템플릿**(v1.1) |
+| 도움말 (v1.2) | `/help` | 위험 리뷰·급증·응답 시간 등 숫자의 기준, 업로드 형식 |
 | 의견 보내기 | `/feedback` | 서비스 의견 접수 |
 | API 문서 | `/docs` | REST API(`/api/v1`) 전체 목록과 직접 호출 (Swagger UI) |
 | 상태 확인 | `/api/v1/health` | 서버·DB 상태 JSON (로그인 불필요, 배포 후 확인용) |
@@ -41,7 +43,7 @@
 | 문서 | 내용 |
 |---|---|
 | [01_project_overview](docs/01_project_overview.md) | 기획 개요 |
-| [02_requirements](docs/02_requirements.md) | 기능(FR-01\~31, v1.1 FR-28\~31 포함)·비기능(NFR-01\~11) 요구사항, User Story |
+| [02_requirements](docs/02_requirements.md) | 기능(FR-01\~42, v1.1 FR-28\~31 · v1.2 FR-32\~42 포함)·비기능(NFR-01\~11) 요구사항, User Story |
 | [03_ui_design](docs/03_ui_design.md) | 화면 목록·흐름 |
 | [04_database_design](docs/04_database_design.md) | 테이블·관계 |
 | [05_api_spec](docs/05_api_spec.md) | REST API 명세 |
@@ -71,7 +73,7 @@ semiproject_01_D/
 ├─ backend/                ← 실제 서버 (여기서 실행)
 │  ├─ main.py              화면(HTML) 라우트
 │  ├─ api_v1.py            REST API /api/v1/*
-│  ├─ models.py            DB 테이블 (SQLAlchemy ORM, ERD 기준 15개 + v1.1 2개)
+│  ├─ models.py            DB 테이블 (SQLAlchemy ORM, ERD 기준 15개 + v1.1 2개 + v1.2 2개)
 │  ├─ schemas.py           요청·응답 형식 (Pydantic)
 │  ├─ analysis.py          리뷰 분석 규칙 · 키워드 추출 · 분석 리포트
 │  ├─ reply_drafts.py      추천 답글 초안
@@ -83,6 +85,9 @@ semiproject_01_D/
 │  ├─ alerts.py            (v1.1) 업로드 후 위험 리뷰 알림 메일
 │  ├─ insights.py          (v1.1) 부정 키워드 급증 · 주간/월간 리포트 계산
 │  ├─ alembic.ini, migrations/  (v1.1) DB 변경 이력 (Alembic)
+│  ├─ seller_tools.py      (v1.2) 조치 효과·상세페이지 보완·불일치·응답 시간·베스트 리뷰·강점
+│  ├─ privacy.py           (v1.2) 리뷰 속 전화번호·이메일 가리기
+│  ├─ onboarding.py        (v1.2) 샘플 데이터 넣기·지우기
 │  ├─ templates/           실제로 화면에 쓰이는 HTML (Jinja2)
 │  └─ tests/               자동 테스트 (pytest)
 ├─ frontend/               ← 디자인 시안 (정적 HTML, 서버에서 사용하지 않음)
@@ -124,7 +129,7 @@ python -m uvicorn main:app --reload        # 최상위 폴더에서
 ```powershell
 cd backend
 python -m alembic upgrade head      # 처음 한 번: 버전 기록(alembic_version) 생성 + 새 테이블 추가
-python -m alembic current           # 현재 버전 (0002 = v1.1)
+python -m alembic current           # 현재 버전 (0003 = v1.2)
 # 모델(models.py)을 바꿨다면: python -m alembic revision --autogenerate -m "설명" → 파일 확인 → upgrade head
 ```
 

@@ -69,7 +69,7 @@
 
         .kpi-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 12px;
         }
 
@@ -251,7 +251,7 @@
             .sidebar, .mobile-bar, .nav-backdrop, .no-print { display: none !important; }
             .main-content { padding: 0 !important; overflow: visible !important; }
             .card { box-shadow: none !important; border: 1px solid #E9ECEF; break-inside: avoid; padding: 16px !important; }
-            .kpi-grid { grid-template-columns: repeat(5, 1fr) !important; }
+            .kpi-grid { grid-template-columns: repeat(6, 1fr) !important; }
             .report-grid { grid-template-columns: 1fr 1fr !important; }
             .print-only { display: block; }
             a { color: inherit; text-decoration: none; }
@@ -416,7 +416,7 @@
                         <tr>
                             <td>{{ r.reviewed_at|dotdate }}</td>
                             <td>{{ r.product.name }}</td>
-                            <td class="risk-text">{{ r.content_raw|truncate(80, True, '…') }}</td>
+                            <td class="risk-text">{{ r.content_raw|pii|truncate(80, True, '…') }}</td>
                             <td class="num">★{{ r.rating }}</td>
                             <td><span class="sev">심각도 {{ r.analysis.severity }}</span></td>
                             <td>{{ '완료' if r.replies else '미처리' }}</td>

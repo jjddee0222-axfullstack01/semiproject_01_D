@@ -389,7 +389,7 @@
                         <a class="product-link" href="{{ url_for('product_dashboard', product_id=r.product_id) }}">상품 바로가기</a>
                     </div>
                     <div class="review-date">★ {{ r.rating }} · {{ r.reviewer_name|mask_name }} · {{ r.reviewed_at|dotdate }}</div>
-                    <div>{{ r.content_raw }}</div>
+                    <div>{{ r.content_raw|pii }}</div>
                 </div>
                 <form class="reply-box" method="post" action="{{ url_for('cschatbot_done') }}">
                     <input type="hidden" name="review_id" value="{{ r.id }}">

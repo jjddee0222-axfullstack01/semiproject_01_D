@@ -17,6 +17,8 @@ ERD에 없는 것 중 이 파일에서 추가한 것 (문서 정책 근거)
   - 보조 테이블 3개 (현재 화면용, 맨 아래): shop_monthly_stats, product_monthly_stats, feedbacks
   - v1.1 추가 2개 (맨 아래): notification_settings(위험 리뷰 메일 알림), reply_templates(셀러 답글 템플릿)
     → 마이그레이션: migrations/versions/0002_*.py
+  - v1.2 추가 2개 (맨 아래): product_actions(상품 개선 조치 기록), review_memos(리뷰 내부 메모·처리 상태)
+    → 마이그레이션: migrations/versions/0003_*.py
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ from sqlalchemy import (JSON, BigInteger, Boolean, CheckConstraint, Date, DateTi
                         ForeignKey, Index, Integer, SmallInteger, String, Text,
                         UniqueConstraint, func, select)
 from sqlalchemy.dialects import mysql
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, backref, mapped_column, relationship
 
 # ──────────────────────────────────────────────
 # 공통 타입 / 옵션
@@ -103,6 +105,13 @@ class IssueType(str, enum.Enum):
     DELIVERY = "DELIVERY"
     PACKAGING = "PACKAGING"
     ETC = "ETC"
+
+
+class MemoStatus(str, enum.Enum):
+    """v1.2 리뷰 내부 처리 상태 (셀러 팀 안에서만 쓰는 값, 쇼핑몰에는 보이지 않음)"""
+    TODO = "TODO"                  # 확인 필요
+    IN_PROGRESS = "IN_PROGRESS"    # 처리 중
+    DONE = "DONE"                  # 처리 완료
 
 
 class BlindAction(str, enum.Enum):
@@ -471,3 +480,41 @@ class ReplyTemplate(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)                            # 최대 2,000자 (API 검증)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(),
                                                  nullable=False)
+
+
+# ══════════════════════════════════════════════
+# v1.2 — PRODUCT_ACTIONS / REVIEW_MEMOS
+# ══════════════════════════════════════════════
+class ProductAction(Base):
+    """셀러가 상품에 한 개선 조치 (예: 2026-10-20 포장 박스 교체) → 조치 전후 리뷰 비교"""
+    __tablename__ = "product_actions"
+    __table_args__ = (
+        Index("ix_product_actions_product_date", "product_id", "action_date"),
+        MYSQL_OPTS,
+    )
+
+    id: Mapped[int] = mapped_column(ID, primary_key=True, autoincrement=True)
+    product_id: Mapped[int] = mapped_column(ID, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    action_date: Mapped[date] = mapped_column(Date, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    issue_type: Mapped[Optional[IssueType]] = mapped_column(_enum(IssueType, "action_issue_type"))  # 개선하려는 이슈 (없으면 전체)
+    created_at: Mapped[datetime] = _now()
+
+    product: Mapped[Product] = relationship()
+
+
+class ReviewMemo(Base):
+    """리뷰 1건당 내부 메모·처리 상태 1행 (담당자끼리 공유)"""
+    __tablename__ = "review_memos"
+    __table_args__ = (MYSQL_OPTS,)
+
+    review_id: Mapped[int] = mapped_column(ID, ForeignKey("reviews.id", ondelete="CASCADE"), primary_key=True)
+    status: Mapped[MemoStatus] = mapped_column(_enum(MemoStatus, "memo_status"), default=MemoStatus.TODO,
+                                               server_default=MemoStatus.TODO.value, nullable=False)
+    memo: Mapped[Optional[str]] = mapped_column(Text)                                     # 최대 1,000자 (화면·API 검증)
+    updated_by: Mapped[Optional[int]] = mapped_column(ID, ForeignKey("users.id", ondelete="SET NULL"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(),
+                                                 nullable=False)
+
+    review: Mapped[Review] = relationship(backref=backref("memo", uselist=False, cascade="all, delete-orphan",
+                                                          passive_deletes=True))

@@ -30,11 +30,15 @@ try:
     from .database import add_default_risk_keywords, analyze_and_save, reanalyze_seller_reviews, seller_risk_keywords
     from .db import get_session
     from .models import (BlindAction, IngestLog, IssueType, Keyword, Polarity, Product,
-                         ReplySuggestion, ReplyTemplate, Review, ReviewAnalysis, ReviewBlindLog, ReviewKeyword,
+                         ProductAction, ReplySuggestion, ReplyTemplate, Review, ReviewAnalysis, ReviewBlindLog,
+                         ReviewKeyword, ReviewMemo,
                          ReviewReply, ReviewStatus, RiskKeyword, User, UserStatus)
     from .pipeline import IngestError, analyze_pending, ingest_csv
     from .alerts import risk_email_enabled, set_risk_email
     from .insights import keyword_surges
+    from .privacy import mask_pii
+    from .seller_tools import (action_effect, best_reviews, detail_tips, mismatch_count, product_actions,
+                               response_stats, strengths)
     from .reply_drafts import seller_reply_draft, seller_templates, template_problem
     from . import schemas as S
     from .security import hash_password, verify_password
@@ -46,11 +50,14 @@ except ImportError:
     from database import add_default_risk_keywords, analyze_and_save, reanalyze_seller_reviews, seller_risk_keywords
     from db import get_session
     from models import (BlindAction, IngestLog, IssueType, Keyword, Polarity, Product,
-                        ReplySuggestion, ReplyTemplate, Review, ReviewAnalysis, ReviewBlindLog, ReviewKeyword,
-                        ReviewReply, ReviewStatus, RiskKeyword, User, UserStatus)
+                        ProductAction, ReplySuggestion, ReplyTemplate, Review, ReviewAnalysis, ReviewBlindLog,
+                        ReviewKeyword, ReviewMemo, ReviewReply, ReviewStatus, RiskKeyword, User, UserStatus)
     from pipeline import IngestError, analyze_pending, ingest_csv
     from alerts import risk_email_enabled, set_risk_email
     from insights import keyword_surges
+    from privacy import mask_pii
+    from seller_tools import (action_effect, best_reviews, detail_tips, mismatch_count, product_actions,
+                              response_stats, strengths)
     from reply_drafts import seller_reply_draft, seller_templates, template_problem
     import schemas as S
     from security import hash_password, verify_password
@@ -658,7 +665,7 @@ def export_reviews(params: Annotated[S.ExportQuery, Query()], user: CurrentUser,
         .order_by(Review.reviewed_at.desc(), Review.id.desc())).all()
     data = [[r.id, r.product_id, name, r.reviewer_name or "", r.rating, r.reviewed_at.isoformat(),
              a.sentiment.value if a else "", a.severity if a else "",
-             a.issue_type.value if a and a.issue_type else "", r.content_raw, r.content_clean or ""]
+             a.issue_type.value if a and a.issue_type else "", mask_pii(r.content_raw), mask_pii(r.content_clean or "")]
             for r, name, a in rows]
     return _csv_response(["review_id", "product_id", "product_name", "reviewer_name", "rating", "reviewed_at",
                           "sentiment", "severity", "issue_type", "content_raw", "content_clean"],
@@ -781,3 +788,129 @@ def delete_reply_template(sentiment: Polarity, user: CurrentUser, db: DB):
     db.delete(template)
     db.commit()
     return _no_content()
+
+
+# ══════════════════════════════════════════════
+# v1.2 — 개선 조치 / 상세페이지 보완 / 별점·내용 불일치 / 메모 / 응답 시간 / 리뷰 활용 / 신고 자료
+# ══════════════════════════════════════════════
+def _action_out(db: Session, action: ProductAction) -> S.ProductActionOut:
+    out = S.ProductActionOut.model_validate(action)
+    out.effect = S.ActionEffectOut(**action_effect(db, action))
+    return out
+
+
+@router.get("/products/{product_id}/actions", response_model=list[S.ProductActionOut], tags=["상품"])
+def list_product_actions(product_id: int, user: CurrentUser, db: DB):
+    """개선 조치 기록 + 조치 전후 같은 기간(최대 30일) 리뷰 비교 (최신 조치부터)"""
+    owned_product(db, product_id, user)
+    return [_action_out(db, a) for a in product_actions(db, product_id)]
+
+
+@router.post("/products/{product_id}/actions", status_code=201, response_model=S.ProductActionOut, tags=["상품"])
+def create_product_action(product_id: int, body: S.ProductActionIn, user: CurrentUser, db: DB):
+    product = owned_product(db, product_id, user)
+    action = ProductAction(product_id=product.id, action_date=body.action_date, title=body.title,
+                           issue_type=body.issue_type)
+    db.add(action)
+    db.commit()
+    db.refresh(action)
+    return _action_out(db, action)
+
+
+@router.delete("/products/{product_id}/actions/{action_id}", status_code=204, tags=["상품"])
+def delete_product_action(product_id: int, action_id: int, user: CurrentUser, db: DB):
+    owned_product(db, product_id, user)
+    action = db.get(ProductAction, action_id)
+    if action is None or action.product_id != product_id:
+        raise _not_found("PRODUCT_ACTION", "개선 조치")
+    db.delete(action)
+    db.commit()
+    return _no_content()
+
+
+@router.get("/products/{product_id}/detail-tips", response_model=list[S.DetailTipOut], tags=["상품"])
+def get_detail_tips(product_id: int, user: CurrentUser, db: DB):
+    """부정·중립 리뷰에서 찾은 '상세페이지에 설명을 더하면 줄일 수 있는 불만' (많은 순)"""
+    owned_product(db, product_id, user)
+    return [S.DetailTipOut(**vars(t)) for t in detail_tips(db, user.id, product_id)]
+
+
+@router.get("/stats/mismatch-count", response_model=S.MismatchCountOut, tags=["통계"])
+def get_mismatch_count(user: CurrentUser, db: DB, product_id: Optional[int] = Query(None, ge=1)):
+    """별점 4~5점인데 아쉬움·불만이 섞인 리뷰 수 (블라인드 제외). 목록은 화면 /reviews?mismatch=1"""
+    if product_id:
+        owned_product(db, product_id, user)
+    return S.MismatchCountOut(count=mismatch_count(db, user.id, product_id))
+
+
+@router.get("/stats/response-time", response_model=S.ResponseTimeOut, tags=["통계"])
+def get_response_time(user: CurrentUser, db: DB):
+    """답글 응답 시간: 리뷰 등록(업로드) → 첫 답글, 3일 넘게 답글 없는 위험 리뷰"""
+    return S.ResponseTimeOut(**response_stats(db, user.id))
+
+
+@router.get("/reviews/{review_id}/memo", response_model=S.ReviewMemoOut, tags=["리뷰"])
+def get_review_memo(review_id: int, user: CurrentUser, db: DB):
+    review = owned_review(db, review_id, user)
+    if review.memo is None:
+        raise _not_found("REVIEW_MEMO", "메모")
+    return review.memo
+
+
+@router.put("/reviews/{review_id}/memo", response_model=S.ReviewMemoOut, tags=["리뷰"])
+def put_review_memo(review_id: int, body: S.ReviewMemoIn, user: CurrentUser, db: DB):
+    """내부 메모·처리 상태 저장 (리뷰당 1개, 쇼핑몰 고객에게는 보이지 않음)"""
+    review = owned_review(db, review_id, user)
+    memo = review.memo or ReviewMemo(review_id=review.id)
+    memo.status, memo.memo, memo.updated_by = body.status, (body.memo or None), user.id
+    db.add(memo)
+    db.commit()
+    db.refresh(memo)
+    return memo
+
+
+@router.delete("/reviews/{review_id}/memo", status_code=204, tags=["리뷰"])
+def delete_review_memo(review_id: int, user: CurrentUser, db: DB):
+    review = owned_review(db, review_id, user)
+    if review.memo is None:
+        raise _not_found("REVIEW_MEMO", "메모")
+    db.delete(review.memo)
+    db.commit()
+    return _no_content()
+
+
+@router.get("/marketing/best-reviews", response_model=list[S.BestReviewOut], tags=["리뷰 활용"])
+def get_best_reviews(params: Annotated[S.MarketingQuery, Query()], user: CurrentUser, db: DB):
+    """상세페이지·SNS 에 쓸 만한 5점 긍정 리뷰 (작성자 이름·전화번호·이메일 가림)"""
+    if params.product_id:
+        owned_product(db, params.product_id, user)
+    return best_reviews(db, user.id, params.product_id, params.limit)
+
+
+@router.get("/marketing/strengths", response_model=S.StrengthsOut, tags=["리뷰 활용"])
+def get_strengths(params: Annotated[S.MarketingQuery, Query()], user: CurrentUser, db: DB):
+    """긍정 키워드 TOP 과 상품 소개 문구 예시"""
+    if params.product_id:
+        owned_product(db, params.product_id, user)
+    return strengths(db, user.id, params.product_id, min(params.limit, 10))
+
+
+@router.get("/exports/blinded-reviews.csv", tags=["내보내기"], response_class=Response)
+def export_blinded_reviews(user: CurrentUser, db: DB):
+    """블라인드한 리뷰 — 쇼핑몰(플랫폼)에 악성 리뷰를 신고할 때 근거 자료 (원문 그대로, 처리 이력 포함)"""
+    reviews = db.scalars(
+        select(Review).join(Review.product)
+        .where(Product.seller_id == user.id, Review.status == ReviewStatus.BLINDED)
+        .options(selectinload(Review.product), selectinload(Review.blind_logs))
+        .order_by(Review.blinded_at.desc(), Review.id.desc())).all()
+    data = []
+    for r in reviews:
+        history = " / ".join(f"{log.created_at:%Y-%m-%d %H:%M} {'블라인드' if log.action == BlindAction.BLIND else '복구'}"
+                             + (f"({log.reason})" if getattr(log, "reason", None) else "")
+                             for log in sorted(r.blind_logs, key=lambda x: x.created_at))
+        data.append([r.id, r.product.name, r.reviewer_name or "", r.rating, r.reviewed_at.isoformat(),
+                     r.content_raw, r.blind_reason or "", f"{r.blinded_at:%Y-%m-%d %H:%M}" if r.blinded_at else "",
+                     history])
+    return _csv_response(["리뷰ID", "상품명", "작성자", "평점", "작성일", "리뷰 원문", "블라인드 사유", "블라인드 일시",
+                          "처리 이력"], data, f"pinpoint_blinded_reviews_{date.today():%Y%m%d}.csv")
+

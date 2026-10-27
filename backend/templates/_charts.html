@@ -53,7 +53,8 @@ const PP = (() => {
     const monthLabel = (m) => `${m.slice(2, 4)}.${m.slice(5, 7)}`;          // '2026-10' → '26.10'
 
     // 월별 리뷰 수 (막대)
-    async function monthlyCount(el, params) {
+    // marks: [{month: '2026-10', label: '포장 교체'}] → 해당 월에 세로 표시선 (v1.2 개선 조치)
+    async function monthlyCount(el, params, marks) {
         message(el, "불러오는 중…");
         try {
             const data = await get("/stats/monthly-trend", params);
@@ -66,7 +67,14 @@ const PP = (() => {
                 xAxis: { type: "category", data: data.map(d => monthLabel(d.month)), ...axisStyle, splitLine: { show: false } },
                 yAxis: { type: "value", minInterval: 1, ...axisStyle, axisLine: { show: false } },
                 series: [{ type: "bar", data: data.map(d => d.count), barMaxWidth: 28,
-                           itemStyle: { color: COLOR.bar, borderRadius: [4, 4, 0, 0] } }],
+                           itemStyle: { color: COLOR.bar, borderRadius: [4, 4, 0, 0] },
+                           markLine: (marks || []).length ? {
+                               symbol: "none", silent: true,
+                               lineStyle: { color: "#F08C00", type: "dashed", width: 1.5 },
+                               label: { color: "#E8590C", fontSize: 10, formatter: (p) => p.name },
+                               data: marks.filter(m => data.some(d => d.month === m.month))
+                                          .map(m => ({ name: m.label, xAxis: monthLabel(m.month) })),
+                           } : undefined }],
             });
         } catch (e) { if (e.message !== "401") message(el, "통계를 불러오지 못했습니다."); }
     }

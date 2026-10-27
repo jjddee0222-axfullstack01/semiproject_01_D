@@ -2,7 +2,7 @@
 
 자동 생성 문서(Swagger UI): 서버 실행 후 `/docs` · 응답 형식 정의: `backend/schemas.py`
 
-**엔드포인트 수:** `/api/v1` 41개 = v1.0.0 34개 + v1.1 7개 (`POST /reviews` 이전 + 아래 11장 6개). v1.1 에서 `/api/v1` 밖에 있던 옛 리뷰 등록 API `POST /api/reviews` 는 삭제하고 `POST /api/v1/reviews` 로 옮겼습니다 (화면에서는 쓰지 않던 API).
+**엔드포인트 수:** `/api/v1` 53개 = v1.0.0 34개 + v1.1 7개 (`POST /reviews` 이전 + 아래 11장 6개) + v1.2 12개 (12장). v1.1 에서 `/api/v1` 밖에 있던 옛 리뷰 등록 API `POST /api/reviews` 는 삭제하고 `POST /api/v1/reviews` 로 옮겼습니다 (화면에서는 쓰지 않던 API).
 
 ## 공통
 
@@ -14,6 +14,7 @@
 | 기간·상품 필터 | `?product_id=&from=YYYY-MM-DD&to=YYYY-MM-DD` |
 | 오류 | 400/422 입력 오류, 401 미인증, 403 권한 없음, 404 없음, 409 충돌, 429 시도 횟수 초과 (형식 `{code, message}`) |
 | 소유권 | 상품·리뷰·답글·위험키워드는 모두 본인 상품 기준으로만 접근 가능 |
+| 개인정보 (v1.2) | 리뷰 본문(`content_raw`, `content_clean`)의 전화번호·이메일은 응답에서 `010-****-****`, `a**@naver.com` 처럼 가림. DB 원문은 그대로 (`privacy.mask_pii`). 예외: `/exports/blinded-reviews.csv` (신고 근거) |
 
 ## 0. 상태 확인
 
@@ -121,6 +122,25 @@
 | DELETE | `/reply-templates/{sentiment}` | 템플릿 삭제 → 기본 초안으로 | 204 / 404(`REPLY_TEMPLATE_NOT_FOUND`) | FR-31 |
 
 화면: 대시보드 '급증한 부정 키워드' 카드, 설정 '알림 설정'·'답글 템플릿' 카드, 리포트 `/reports?period=week|month` (FR-30, API 없이 화면에서 인쇄 → PDF 저장)
+
+## 12. v1.2 추가 (셀러 도구 · 리뷰 활용)
+
+| 메서드 | 경로 | 설명 | 응답 | FR |
+| --- | --- | --- | --- | --- |
+| GET | `/products/{product_id}/actions` | 개선 조치 목록 + `effect` (조치 전후 같은 기간(최대 30일)의 `{count, avg_rating, negative_ratio, target, target_ratio}`, `verdict`, `tone` = good / bad / same / wait) | 200 / 403 / 404 | FR-32 |
+| POST | `/products/{product_id}/actions` | 조치 기록 (body: `action_date`, `title` 1~200자, 선택 `issue_type`) | 201 / 403 / 404 / 422 | FR-32 |
+| DELETE | `/products/{product_id}/actions/{action_id}` | 조치 기록 삭제 | 204 / 403 / 404(`PRODUCT_ACTION_NOT_FOUND`) | FR-32 |
+| GET | `/products/{product_id}/detail-tips` | 상세페이지 보완 포인트 `[{topic, count, suggestion, examples}]` (부정·중립 리뷰, 많은 순 5개, 예시는 개인정보 가림) | 200 / 403 / 404 | FR-33 |
+| GET | `/stats/mismatch-count` | 별점 4~5점인데 부정으로 분석됐거나 아쉬움 표현이 있는 리뷰 수 (`?product_id=`) | 200 / 403 | FR-34 |
+| GET | `/stats/response-time` | `{avg_hours, avg_text, replied, within_day_ratio, overdue_risky, overdue_days}` — 리뷰 등록(업로드) → 첫 답글 | 200 | FR-35 |
+| GET | `/reviews/{review_id}/memo` | 내부 메모·처리 상태 | 200 / 403 / 404(`REVIEW_MEMO_NOT_FOUND`) | FR-36 |
+| PUT | `/reviews/{review_id}/memo` | 저장 (body: `status` = TODO / IN_PROGRESS / DONE, 선택 `memo` 1,000자 이하) | 200 / 403 / 422 | FR-36 |
+| DELETE | `/reviews/{review_id}/memo` | 삭제 | 204 / 403 / 404 | FR-36 |
+| GET | `/exports/blinded-reviews.csv` | 블라인드한 리뷰 신고 자료 (리뷰ID·상품명·작성자·평점·작성일·원문·사유·일시·처리 이력) | 200 (CSV) | FR-37 |
+| GET | `/marketing/best-reviews` | 베스트 리뷰 (`?product_id=&limit=10`, 5점·긍정·위험 아님·아쉬움 표현 없음·15자 이상, 이름·연락처 가림) | 200 / 403 / 422 | FR-38 |
+| GET | `/marketing/strengths` | 강점 키워드 `{review_count, avg_rating, keywords: [{word, phrase, count}], sentences}` (평균 4점 미만이면 문구에 평점을 넣지 않음) | 200 / 403 | FR-38 |
+
+화면 전용(v1.2): 상품별 대시보드 조치 기록 `POST /products/{id}/actions(/{action_id}/delete)`, 리뷰 메모 `POST /reviews/{id}/memo(/delete)`, 샘플 `POST /onboarding/sample(/delete)`, `GET /marketing`, `GET /help`. 업로드(`POST /products/upload`)는 `.xlsx` 와 쇼핑몰 파일 열 이름을 받음 (FR-39).
 
 ## 10. 응답 예시 (실제 응답)
 

@@ -24,6 +24,8 @@ PIN POINT REVIEW - Pydantic v2 스키마 (API 요청 / 응답)
   8. 데이터 파이프라인 /internal/*
   9. 현재 화면 전용   리뷰 등록 API, 의견 보내기
  10. v1.1 추가       /users/me/notifications, /stats/keyword-surges, /reply-templates
+ 11. v1.2 추가       /products/{id}/actions, /products/{id}/detail-tips, /reviews/{id}/memo,
+                     /stats/response-time, /stats/mismatch-count, /marketing/*, /exports/blinded-reviews.csv
 """
 from __future__ import annotations
 
@@ -32,12 +34,14 @@ from datetime import date, datetime
 from typing import Generic, Literal, Optional, TypeVar
 
 from pydantic import (AliasChoices, BaseModel, ConfigDict, Field,
-                      field_validator, model_validator)
+                      field_serializer, field_validator, model_validator)
 
 try:
-    from .models import BlindAction, IssueType, MallPlatform, Polarity, ReviewStatus, UserStatus
+    from .models import BlindAction, IssueType, MallPlatform, MemoStatus, Polarity, ReviewStatus, UserStatus
+    from .privacy import mask_pii
 except ImportError:
-    from models import BlindAction, IssueType, MallPlatform, Polarity, ReviewStatus, UserStatus
+    from models import BlindAction, IssueType, MallPlatform, MemoStatus, Polarity, ReviewStatus, UserStatus
+    from privacy import mask_pii
 
 
 # ══════════════════════════════════════════════
@@ -285,6 +289,10 @@ class ReviewOut(ResponseModel):
     status: ReviewStatus
     analysis: Optional[ReviewAnalysisBrief] = None
 
+    @field_serializer("content_raw")
+    def _hide_pii(self, value: str) -> str:            # v1.2 응답에서는 전화번호·이메일을 가림 (DB 원문은 그대로)
+        return mask_pii(value)
+
 
 class ReviewKeywordOut(ResponseModel):
     """리뷰에 매핑된 키워드 (ORM: ReviewKeyword → keyword.word 를 평탄화)"""
@@ -306,6 +314,11 @@ class ReviewDetailOut(ReviewOut):
     """GET /reviews/{review_id}  — 분석 결과, 키워드, 답글 포함"""
     content_clean: Optional[str] = None
     blind_reason: Optional[str] = None
+
+    @field_serializer("content_clean")
+    def _hide_pii_clean(self, value: Optional[str]) -> Optional[str]:
+        return mask_pii(value)
+
     blinded_by: Optional[int] = None
     blinded_at: Optional[datetime] = None
     created_at: datetime
@@ -416,6 +429,10 @@ class RiskReviewItem(ResponseModel):
     sentiment: Polarity
     severity: int = Field(..., ge=0, le=3)
     issue_type: Optional[IssueType] = None
+
+    @field_serializer("content_raw")
+    def _hide_pii(self, value: str) -> str:
+        return mask_pii(value)
 
 
 class IssueTypeCountItem(ResponseModel):
@@ -614,3 +631,101 @@ class ReplyTemplateOut(ResponseModel):
     sentiment: Polarity
     content: str
     updated_at: datetime
+
+
+# ══════════════════════════════════════════════
+# 11. v1.2 추가 — 개선 조치 / 상세페이지 보완 / 메모 / 응답 시간 / 리뷰 활용
+# ══════════════════════════════════════════════
+class ProductActionIn(RequestModel):
+    action_date: date
+    title: str = Field(min_length=1, max_length=200, description="한 조치 (예: 완충재 2겹으로 변경)")
+    issue_type: Optional[IssueType] = Field(None, description="개선하려는 이슈 (없으면 부정 리뷰 전체로 비교)")
+
+
+class EffectWindow(ResponseModel):
+    count: int
+    avg_rating: Optional[float] = None
+    negative_ratio: Optional[float] = None
+    target: int
+    target_ratio: Optional[float] = None
+
+
+class ActionEffectOut(ResponseModel):
+    days: int = Field(description="비교 기간(일). 조치일 전후 같은 길이, 최대 30")
+    before: EffectWindow
+    after: EffectWindow
+    target_label: str
+    verdict: str
+    tone: Literal["good", "bad", "same", "wait"]
+
+
+class ProductActionOut(ResponseModel):
+    id: int
+    product_id: int
+    action_date: date
+    title: str
+    issue_type: Optional[IssueType] = None
+    created_at: datetime
+    effect: Optional[ActionEffectOut] = None
+
+
+class DetailTipOut(ResponseModel):
+    topic: str
+    count: int
+    suggestion: str
+    examples: list[str]
+
+
+class ReviewMemoIn(RequestModel):
+    status: MemoStatus = MemoStatus.TODO
+    memo: Optional[str] = Field(None, max_length=1000)
+
+
+class ReviewMemoOut(ResponseModel):
+    review_id: int
+    status: MemoStatus
+    memo: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_at: datetime
+
+
+class ResponseTimeOut(ResponseModel):
+    avg_hours: Optional[float] = Field(description="리뷰 등록(업로드) → 첫 답글까지 평균 시간")
+    avg_text: str
+    replied: int
+    within_day_ratio: Optional[float] = Field(description="24시간 안에 답글을 단 비율(%)")
+    overdue_risky: int = Field(description="등록 후 overdue_days 일이 지나도 답글이 없는 위험 리뷰 수")
+    overdue_days: int
+
+
+class MismatchCountOut(ResponseModel):
+    count: int
+
+
+class MarketingQuery(RequestModel):
+    product_id: Optional[int] = Field(None, ge=1)
+    limit: int = Field(10, ge=1, le=30)
+
+
+class BestReviewOut(ResponseModel):
+    id: int
+    product_id: int
+    product_name: str
+    reviewer: str
+    reviewed_at: date
+    content: str
+    keywords: list[str]
+
+
+class StrengthKeyword(ResponseModel):
+    word: str
+    phrase: str
+    count: int
+
+
+class StrengthsOut(ResponseModel):
+    review_count: int
+    avg_rating: Optional[float] = None
+    keywords: list[StrengthKeyword]
+    sentences: list[str]
+

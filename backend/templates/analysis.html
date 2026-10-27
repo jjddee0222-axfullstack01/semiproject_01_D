@@ -443,7 +443,7 @@
                     {% for r in praise %}
                     <div class="review-quote">
                         <div class="meta">★ {{ r.rating }} · {{ r.product.name }} · {{ r.reviewer_name|mask_name }} · {{ r.reviewed_at|dotdate }}</div>
-                        {{ r.content_raw }}
+                        {{ r.content_raw|pii }}
                     </div>
                     {% endfor %}
                 </div>
@@ -456,7 +456,7 @@
                     {% for r in complaints %}
                     <div class="review-quote">
                         <div class="meta">★ {{ r.rating }} · {{ r.product.name }} · {{ r.reviewer_name|mask_name }} · {{ r.reviewed_at|dotdate }}{% if r.analysis.severity >= RISK_SEVERITY %} · <span style="color:#FA5252;font-weight:600;">⚠️ 위험</span>{% endif %}</div>
-                        {{ r.content_raw }}
+                        {{ r.content_raw|pii }}
                     </div>
                     {% endfor %}
                 </div>

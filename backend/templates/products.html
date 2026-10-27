@@ -338,10 +338,10 @@
         </div>
         {% include '_flash.html' %}
 
-        <!-- 리뷰 CSV 업로드: 상품이 없으면 새로 만들고, 리뷰는 적재 후 바로 분석 -->
+        <!-- 리뷰 CSV·엑셀 업로드: 상품이 없으면 새로 만들고, 리뷰는 적재 후 바로 분석 -->
         <div class="upload-card">
             <div class="upload-head">
-                <div class="upload-title">리뷰 데이터 업로드 (CSV)</div>
+                <div class="upload-title">리뷰 데이터 업로드 (CSV · 엑셀)</div>
                 <span>
                     <a href="{{ url_for('products_upload_template') }}">양식 내려받기</a> ·
                     <a href="{{ url_for('upload_history') }}">업로드 이력</a> ·
@@ -350,13 +350,14 @@
             </div>
             <div class="upload-guide">
                 필수 열: <b>상품명, 평점(1~5 정수), 리뷰내용, 작성일(2026-10-01, 오늘 이전)</b> · 선택 열: 카테고리, 작성자, 상품설명<br>
-                같은 상품·작성자·작성일·내용의 리뷰는 중복으로 보고 건너뜁니다. 최대 5MB · 10,000행, UTF-8 또는 엑셀 CSV.
+                같은 상품·작성자·작성일·내용의 리뷰는 중복으로 보고 건너뜁니다. 최대 5MB · 10,000행, CSV(UTF-8·엑셀 CSV) 또는 엑셀 .xlsx.<br>
+                스마트스토어·쿠팡에서 내려받은 리뷰 파일도 열 이름(구매자평점·리뷰상세내용·리뷰등록일 등)을 자동으로 맞춰 읽습니다. <a href="{{ url_for('help_page') }}#upload">자세히</a>
             </div>
             <form class="upload-form" method="post" action="{{ url_for('products_upload') }}" enctype="multipart/form-data">
                 <label class="upload-drop" id="upload-drop">
                     <span class="pick">파일 선택</span>
-                    <span id="upload-name">CSV 파일을 선택하거나 여기로 끌어다 놓으세요</span>
-                    <input type="file" name="file" id="upload-file" accept=".csv,text/csv" required>
+                    <span id="upload-name">CSV·엑셀(.xlsx) 파일을 선택하거나 여기로 끌어다 놓으세요</span>
+                    <input type="file" name="file" id="upload-file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
                 </label>
                 <button type="submit" id="upload-btn" disabled>업로드</button>
             </form>
@@ -397,7 +398,7 @@
         function showFile() {
             const file = fileInput.files[0];
             document.getElementById("upload-name").textContent =
-                file ? `${file.name} (${(file.size / 1024).toFixed(1)} KB)` : "CSV 파일을 선택하거나 여기로 끌어다 놓으세요";
+                file ? `${file.name} (${(file.size / 1024).toFixed(1)} KB)` : "CSV·엑셀(.xlsx) 파일을 선택하거나 여기로 끌어다 놓으세요";
             button.disabled = !file;
         }
         fileInput.addEventListener("change", showFile);

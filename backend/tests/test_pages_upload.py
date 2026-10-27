@@ -71,7 +71,9 @@ def test_upload_reports_bad_rows(page, session):
 
 
 @pytest.mark.parametrize("filename, content, message", [
-    ("reviews.xlsx", "x", "CSV 파일(.csv)만"),
+    ("reviews.txt", "x", "CSV(.csv) 또는 엑셀(.xlsx) 파일만"),               # v1.2: .xlsx 허용으로 문구 변경
+    ("reviews.xls", "x", "예전 엑셀 형식(.xls)은 읽을 수 없습니다"),
+    ("reviews.xlsx", "x", "엑셀 파일을 읽을 수 없습니다"),                   # 확장자만 .xlsx 인 깨진 파일
     ("reviews.csv", "상품명,평점\nA,5\n", "필수 컬럼이 없습니다: 리뷰내용(content), 작성일(reviewed_at)"),
     ("reviews.csv", "", "빈 파일입니다"),
     ("reviews.csv", "상품명,평점,리뷰내용,작성일\n", "리뷰 데이터가 없습니다"),
@@ -85,7 +87,7 @@ def test_upload_rejects_bad_files(page, session, filename, content, message):
 
 def test_upload_without_file(page):
     r = page.post("/products/upload", data={})
-    assert "CSV 파일을 선택해 주세요" in r.text
+    assert "CSV 또는 엑셀(.xlsx) 파일을 선택해 주세요" in r.text
 
 
 def test_upload_too_large(page, monkeypatch):

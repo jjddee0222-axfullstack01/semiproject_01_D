@@ -37,7 +37,7 @@ def test_other_seller_cannot_touch(api, other_api):
 
 def test_new_keyword_used_for_new_reviews(api, ids):
     api.post(URL, json={"word": "냄새", "weight": 3})
-    r = api.post("/api/reviews", json={"product_id": ids["product_a"], "content": "냄새가 심해요", "rating": 4})
+    r = api.post(f"{API}/reviews", json={"product_id": ids["product_a"], "content": "냄새가 심해요", "rating": 4})
     assert r.json()["is_risky"] is True
 
 

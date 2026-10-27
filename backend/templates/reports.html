@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIN POINT REVIEW - {{ report.label }} 리포트</title>
+    {% include '_layout_styles.html' %}
+    <style>
+        /* v1.1 주간/월간 리포트 — 화면 그대로 인쇄(PDF 저장)할 수 있게 구성 */
+        .report-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .period-tabs {
+            display: inline-flex;
+            border: 1px solid #DEE2E6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .period-tabs a {
+            padding: 8px 16px;
+            font-size: 13px;
+            color: #495057;
+            text-decoration: none;
+            background: #ffffff;
+        }
+
+        .period-tabs a.active {
+            background: #111111;
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .btn-print {
+            height: 36px;
+            padding: 0 16px;
+            border: 0;
+            border-radius: 8px;
+            background: #111111;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .report-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .report-head h2 {
+            font-size: 20px;
+            font-weight: 800;
+            color: #111111;
+        }
+
+        .report-range {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #495057;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        .kpi {
+            padding: 16px;
+            border: 1px solid #F1F3F5;
+            border-radius: 10px;
+            background: #FAFAFA;
+        }
+
+        .kpi-label {
+            font-size: 12px;
+            color: #868E96;
+        }
+
+        .kpi-value {
+            margin-top: 6px;
+            font-size: 22px;
+            font-weight: 800;
+            color: #111111;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .kpi-value small {
+            font-size: 13px;
+            font-weight: 600;
+            margin-left: 2px;
+        }
+
+        .kpi-delta {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #868E96;
+        }
+
+        .kpi-delta.good {
+            color: #2B8A3E;
+        }
+
+        .kpi-delta.bad {
+            color: #C92A2A;
+        }
+
+        .report-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .bar-row {
+            display: grid;
+            grid-template-columns: 72px 1fr 104px;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .bar-track {
+            height: 10px;
+            border-radius: 5px;
+            background: #F1F3F5;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 5px;
+            background: #495057;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .bar-fill.POS { background: #2F9E44; }
+        .bar-fill.NEU { background: #ADB5BD; }
+        .bar-fill.NEG { background: #E03131; }
+        .bar-fill.issue { background: #F08C00; }
+
+        .bar-num {
+            white-space: nowrap;
+            text-align: right;
+            color: #495057;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .word-cols {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .word-list {
+            list-style: none;
+            font-size: 13px;
+        }
+
+        .word-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #F8F9FA;
+        }
+
+        .word-head {
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .word-head.neg { color: #C92A2A; }
+        .word-head.pos { color: #2B8A3E; }
+
+        .summary-block p {
+            font-size: 13px;
+            line-height: 1.7;
+            color: #333333;
+        }
+
+        .summary-block p + p {
+            margin-top: 6px;
+        }
+
+        .summary-block ul {
+            margin: 8px 0 0 18px;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .surge-chip {
+            display: inline-block;
+            margin: 0 6px 6px 0;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: #FFF5F5;
+            color: #C92A2A;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .risk-text {
+            color: #333333;
+            line-height: 1.5;
+        }
+
+        .sev {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #FFE3E3;
+            color: #C92A2A;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .print-only {
+            display: none;
+        }
+
+        @media (max-width: 1100px) {
+            .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .kpi-grid, .report-grid, .word-cols { grid-template-columns: 1fr 1fr !important; }
+            .report-grid { grid-template-columns: 1fr !important; }
+            .report-toolbar { flex-wrap: wrap; }
+            .table-scroll { overflow-x: auto; }
+        }
+
+        /* 인쇄 / PDF 저장: 메뉴·버튼을 숨기고 A4 한 장 흐름으로 */
+        @page {
+            size: A4;
+            margin: 14mm 12mm;
+        }
+
+        @media print {
+            body { display: block !important; height: auto !important; background: #ffffff !important; }
+            .sidebar, .mobile-bar, .nav-backdrop, .no-print { display: none !important; }
+            .main-content { padding: 0 !important; overflow: visible !important; }
+            .card { box-shadow: none !important; border: 1px solid #E9ECEF; break-inside: avoid; padding: 16px !important; }
+            .kpi-grid { grid-template-columns: repeat(5, 1fr) !important; }
+            .report-grid { grid-template-columns: 1fr 1fr !important; }
+            .print-only { display: block; }
+            a { color: inherit; text-decoration: none; }
+        }
+    </style>
+</head>
+<body>
+
+    {% include '_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="page-title-area no-print">
+            <h1 class="page-title">리포트</h1>
+            <div class="report-toolbar">
+                <nav class="period-tabs" aria-label="리포트 기간">
+                    {% for key, (label, days) in periods.items() %}
+                    <a href="{{ url_for('reports') }}?period={{ key }}" class="{{ 'active' if report.period == key }}">{{ label }} ({{ days }}일)</a>
+                    {% endfor %}
+                </nav>
+                <button type="button" class="btn-print" onclick="window.print()">PDF로 저장</button>
+            </div>
+        </div>
+        <div class="no-print">{% include '_flash.html' %}</div>
+
+        <div class="card">
+            <div class="report-head">
+                <div>
+                    <h2>{{ current_user.mall_name }} {{ report.label }} 리뷰 리포트</h2>
+                    <div class="report-range">
+                        {{ report.start|dotdate }} ~ {{ report.end|dotdate }} ({{ report.days }}일)
+                        · 비교 기간 {{ report.prev_start|dotdate }} ~ {{ report.prev_end|dotdate }}
+                    </div>
+                </div>
+                <div class="muted">작성 {{ generated_at.strftime('%Y.%m.%d %H:%M') }} · 블라인드 리뷰 제외</div>
+            </div>
+            <p class="muted no-print" style="margin-top:10px;">
+                'PDF로 저장'을 누른 뒤 인쇄 창의 대상(프린터)에서 <b>PDF로 저장</b>을 고르면 파일로 받을 수 있습니다.
+            </p>
+        </div>
+
+        <!-- 핵심 지표 -->
+        <div class="card">
+            <div class="card-title">핵심 지표 (이전 {{ report.days }}일 대비)</div>
+            <div class="kpi-grid">
+                {% for k in report.kpis %}
+                <div class="kpi">
+                    <div class="kpi-label">{{ k.label }}</div>
+                    <div class="kpi-value">{% if k.value is none %}-{% else %}{{ k.value }}<small>{{ k.unit }}</small>{% endif %}</div>
+                    {% if k.delta is none %}
+                    <div class="kpi-delta">비교 데이터 없음</div>
+                    {% elif k.delta == 0 %}
+                    <div class="kpi-delta">변화 없음</div>
+                    {% else %}
+                    {% set up = k.delta > 0 %}
+                    <div class="kpi-delta {{ 'good' if up == (k.good_when == 'up') else 'bad' }}">
+                        {{ '▲' if up else '▼' }} {{ k.delta|abs }}{{ '%p' if k.unit == '%' else k.unit }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="report-grid">
+            <div class="card">
+                <div class="card-title">감성 분포</div>
+                {% for s in report.sentiments %}
+                <div class="bar-row">
+                    <span>{{ s.label }}</span>
+                    <div class="bar-track"><div class="bar-fill {{ s.key }}" style="width: {{ s.ratio }}%"></div></div>
+                    <span class="bar-num">{{ s.count }}건 · {{ s.ratio }}%</span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="card">
+                <div class="card-title">부정 리뷰 이슈 유형</div>
+                {% for i in report.issues %}
+                <div class="bar-row">
+                    <span>{{ i.label }}</span>
+                    <div class="bar-track"><div class="bar-fill issue" style="width: {{ i.width }}%"></div></div>
+                    <span class="bar-num">{{ i.count }}건</span>
+                </div>
+                {% else %}
+                <p class="muted">이 기간에 부정 리뷰가 없습니다.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="report-grid">
+            <div class="card">
+                <div class="card-title">키워드 TOP 5</div>
+                <div class="word-cols">
+                    <div>
+                        <div class="word-head neg">부정</div>
+                        <ul class="word-list">
+                            {% for w, n in report.negative_keywords %}<li><span>{{ w }}</span><span>{{ n }}건</span></li>
+                            {% else %}<li class="muted">없음</li>{% endfor %}
+                        </ul>
+                    </div>
+                    <div>
+                        <div class="word-head pos">긍정</div>
+                        <ul class="word-list">
+                            {% for w, n in report.positive_keywords %}<li><span>{{ w }}</span><span>{{ n }}건</span></li>
+                            {% else %}<li class="muted">없음</li>{% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card summary-block">
+                <div class="card-title">요약 및 개선 제안</div>
+                <p><b>강점</b> {{ report.summary.strengths }}</p>
+                {% if report.summary.weaknesses %}<p><b>약점</b> {{ report.summary.weaknesses }}</p>{% endif %}
+                {% if report.summary.recommendations %}
+                <ul>{% for rec in report.summary.recommendations %}<li>{{ rec }}</li>{% endfor %}</ul>
+                {% endif %}
+                {% if report.surges %}
+                <p style="margin-top:12px;"><b>급증한 부정 키워드</b></p>
+                <div style="margin-top:6px;">
+                    {% for s in report.surges %}
+                    <span class="surge-chip">‘{{ s.word }}’ {{ s.previous }}→{{ s.current }}건</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">상품별 현황</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>상품</th><th class="num">리뷰</th><th class="num">이전 기간</th><th class="num">평균 평점</th>
+                            <th class="num">부정</th><th class="num">위험</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for p in report.products %}
+                        <tr>
+                            <td>{{ p.name }}</td>
+                            <td class="num">{{ p.count }}</td>
+                            <td class="num">{{ p.prev_count }}</td>
+                            <td class="num">{{ p.avg_rating if p.avg_rating is not none else '-' }}</td>
+                            <td class="num">{{ p.negative }}</td>
+                            <td class="num">{{ p.risky }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="muted">이 기간에 들어온 리뷰가 없습니다.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">주의가 필요한 위험 리뷰</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>작성일</th><th>상품</th><th>리뷰</th><th class="num">평점</th><th>위험도</th><th>답글</th></tr></thead>
+                    <tbody>
+                        {% for r in report.risky_reviews %}
+                        <tr>
+                            <td>{{ r.reviewed_at|dotdate }}</td>
+                            <td>{{ r.product.name }}</td>
+                            <td class="risk-text">{{ r.content_raw|truncate(80, True, '…') }}</td>
+                            <td class="num">★{{ r.rating }}</td>
+                            <td><span class="sev">심각도 {{ r.analysis.severity }}</span></td>
+                            <td>{{ '완료' if r.replies else '미처리' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="muted">이 기간에 위험 리뷰가 없습니다.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <p class="print-only muted">PIN POINT REVIEW · {{ current_user.mall_name }} · {{ generated_at.strftime('%Y.%m.%d %H:%M') }}</p>
+    </main>
+
+</body>
+</html>

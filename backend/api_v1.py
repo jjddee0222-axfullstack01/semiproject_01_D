@@ -30,10 +30,12 @@ try:
     from .database import add_default_risk_keywords, analyze_and_save, reanalyze_seller_reviews, seller_risk_keywords
     from .db import get_session
     from .models import (BlindAction, IngestLog, IssueType, Keyword, Polarity, Product,
-                         ReplySuggestion, Review, ReviewAnalysis, ReviewBlindLog, ReviewKeyword,
+                         ReplySuggestion, ReplyTemplate, Review, ReviewAnalysis, ReviewBlindLog, ReviewKeyword,
                          ReviewReply, ReviewStatus, RiskKeyword, User, UserStatus)
     from .pipeline import IngestError, analyze_pending, ingest_csv
-    from .reply_drafts import generate_reply_draft
+    from .alerts import risk_email_enabled, set_risk_email
+    from .insights import keyword_surges
+    from .reply_drafts import seller_reply_draft, seller_templates, template_problem
     from . import schemas as S
     from .security import hash_password, verify_password
 except ImportError:
@@ -44,10 +46,12 @@ except ImportError:
     from database import add_default_risk_keywords, analyze_and_save, reanalyze_seller_reviews, seller_risk_keywords
     from db import get_session
     from models import (BlindAction, IngestLog, IssueType, Keyword, Polarity, Product,
-                        ReplySuggestion, Review, ReviewAnalysis, ReviewBlindLog, ReviewKeyword,
+                        ReplySuggestion, ReplyTemplate, Review, ReviewAnalysis, ReviewBlindLog, ReviewKeyword,
                         ReviewReply, ReviewStatus, RiskKeyword, User, UserStatus)
     from pipeline import IngestError, analyze_pending, ingest_csv
-    from reply_drafts import generate_reply_draft
+    from alerts import risk_email_enabled, set_risk_email
+    from insights import keyword_surges
+    from reply_drafts import seller_reply_draft, seller_templates, template_problem
     import schemas as S
     from security import hash_password, verify_password
 
@@ -332,6 +336,22 @@ def list_reviews(product_id: int, params: Annotated[S.ReviewListQuery, Query()],
                          .limit(params.size).offset(params.offset)).all()
     return S.Page[S.ReviewOut](items=[S.ReviewOut.model_validate(r) for r in reviews],
                                page=params.page, size=params.size, total=total)
+
+
+@router.post("/reviews", status_code=201, response_model=S.ReviewCreateResult, tags=["리뷰"])
+def create_review(body: S.ReviewCreate, user: CurrentUser, db: DB):
+    """리뷰 1건 등록 (연동·테스트용). 등록 즉시 셀러의 위험 키워드로 자동 분석
+
+    v1.1: 예전 POST /api/reviews 를 /api/v1 로 옮김 (오류 형식 {code, message} 통일, 옛 주소는 삭제)
+    """
+    product = owned_product(db, body.product_id, user)
+    review = Review(product_id=product.id, reviewer_name=body.reviewer_name, rating=body.rating,
+                    content_raw=body.content, reviewed_at=body.reviewed_at or date.today())
+    db.add(review)
+    analysis = analyze_and_save(db, review, seller_risk_keywords(db, user.id))
+    db.commit()
+    return S.ReviewCreateResult(id=review.id, sentiment=analysis.sentiment, severity=analysis.severity,
+                                issue_type=analysis.issue_type, is_risky=analysis.severity >= RISK_SEVERITY)
 
 
 def _detail(review: Review) -> S.ReviewDetailOut:
@@ -656,7 +676,7 @@ def create_reply_suggestion(review_id: int, user: CurrentUser, db: DB):
         db.flush()
     if review.analysis.sentiment == Polarity.POS:
         raise ApiError(409, "NOT_NEGATIVE_REVIEW", "사과 답글 초안은 부정 리뷰에만 만들 수 있습니다.")
-    draft, model = generate_reply_draft(review, user.mall_name)
+    draft, model = seller_reply_draft(review, user, seller_templates(db, user.id))   # v1.1 셀러 템플릿 우선
     suggestion = ReplySuggestion(review_id=review.id, draft=draft, llm_model=model)
     db.add(suggestion)
     db.commit()
@@ -712,3 +732,52 @@ def ingest_logs(db: DB):
 
 
 router.include_router(internal)
+
+# ══════════════════════════════════════════════
+# v1.1 — 알림 설정 / 부정 키워드 급증 / 셀러 답글 템플릿
+# ══════════════════════════════════════════════
+@router.get("/users/me/notifications", response_model=S.NotificationSettingsOut, tags=["인증·계정"])
+def get_notifications(user: CurrentUser, db: DB):
+    return S.NotificationSettingsOut(risk_email=risk_email_enabled(db, user.id))
+
+
+@router.put("/users/me/notifications", response_model=S.NotificationSettingsOut, tags=["인증·계정"])
+def put_notifications(body: S.NotificationSettingsIn, user: CurrentUser, db: DB):
+    set_risk_email(db, user.id, body.risk_email)
+    db.commit()
+    return S.NotificationSettingsOut(risk_email=body.risk_email)
+
+
+@router.get("/stats/keyword-surges", response_model=list[S.KeywordSurgeItem], tags=["통계"])
+def get_keyword_surges(params: Annotated[S.KeywordSurgeQuery, Query()], user: CurrentUser, db: DB):
+    """최근 7일에 3건 이상 + 이전 7일보다 2배 이상(또는 새로 등장) 늘어난 부정 키워드 (블라인드 제외)"""
+    return [S.KeywordSurgeItem(**vars(s)) for s in keyword_surges(db, user.id, limit=params.limit)]
+
+
+@router.get("/reply-templates", response_model=list[S.ReplyTemplateOut], tags=["CS 답글"])
+def list_reply_templates(user: CurrentUser, db: DB):
+    """내가 저장한 답글 템플릿 (없는 감성은 기본 초안 사용)"""
+    templates = seller_templates(db, user.id)
+    return [templates[p] for p in (Polarity.NEG, Polarity.NEU, Polarity.POS) if p in templates]
+
+
+@router.put("/reply-templates/{sentiment}", response_model=S.ReplyTemplateOut, tags=["CS 답글"])
+def put_reply_template(sentiment: Polarity, body: S.ReplyTemplateIn, user: CurrentUser, db: DB):
+    if problem := template_problem(body.content):
+        raise ApiError(422, "INVALID_TEMPLATE", problem)
+    template = seller_templates(db, user.id).get(sentiment) or ReplyTemplate(seller_id=user.id, sentiment=sentiment)
+    template.content = body.content
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    return template
+
+
+@router.delete("/reply-templates/{sentiment}", status_code=204, tags=["CS 답글"])
+def delete_reply_template(sentiment: Polarity, user: CurrentUser, db: DB):
+    template = seller_templates(db, user.id).get(sentiment)
+    if template is None:
+        raise _not_found("REPLY_TEMPLATE", "답글 템플릿")
+    db.delete(template)
+    db.commit()
+    return _no_content()

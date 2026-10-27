@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.templating import Jinja2Templates
@@ -38,15 +38,19 @@ try:
     from . import rate_limit
     from .email_verify import (PURPOSES, MailUnavailable, check_code, issue_code, mail_config_warning,
                                show_code_on_screen, verification_enabled)
-    from .database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
-                           reanalyze_seller_reviews, seller_risk_keywords, this_month)
+    from .database import (add_default_risk_keywords, init_db, last_month, reanalyze_seller_reviews,
+                           this_month)
     from .db import describe_db, get_session
     from .models import (BlindAction, Feedback, IngestLog, IssueType, Keyword, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                         ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
+                         ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ReplyTemplate, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                          UserStatus, visible_reviews)
     from .pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
-    from .reply_drafts import generate_reply_draft
-    from .schemas import EMAIL_PATTERN, PASSWORD_MESSAGE, PASSWORD_PATTERN, ReviewCreate, ReviewCreateResult
+    from .alerts import (compose_risk_mail, deliver, last_review_id, risk_email_enabled, risky_reviews_after,
+                             set_risk_email)
+    from .insights import REPORT_PERIODS, keyword_surges, period_report
+    from .reply_drafts import (SENTIMENT_LABELS, TEMPLATE_MAX_LENGTH, TEMPLATE_PLACEHOLDERS, seller_reply_draft,
+                                   seller_templates, template_problem)
+    from .schemas import EMAIL_PATTERN, PASSWORD_MESSAGE, PASSWORD_PATTERN
     from .security import hash_password, verify_password
 except ImportError:
     from analysis import RISK_SEVERITY, shop_report, summarize_reviews
@@ -56,15 +60,19 @@ except ImportError:
     import rate_limit
     from email_verify import (PURPOSES, MailUnavailable, check_code, issue_code, mail_config_warning,
                               show_code_on_screen, verification_enabled)
-    from database import (add_default_risk_keywords, analyze_and_save, init_db, last_month,
-                          reanalyze_seller_reviews, seller_risk_keywords, this_month)
+    from database import (add_default_risk_keywords, init_db, last_month, reanalyze_seller_reviews,
+                          this_month)
     from db import describe_db, get_session
     from models import (BlindAction, Feedback, IngestLog, IssueType, Keyword, MallPlatform, Polarity, Product, ProductMonthlyStat, Review,
-                        ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
+                        ReviewAnalysis, ReviewBlindLog, ReviewKeyword, ReplyTemplate, ReviewReply, ReviewStatus, RiskKeyword, ShopMonthlyStat, User,
                         UserStatus, visible_reviews)
     from pipeline import IngestError, decode_csv_bytes, ingest_rows, parse_csv_text
-    from reply_drafts import generate_reply_draft
-    from schemas import EMAIL_PATTERN, PASSWORD_MESSAGE, PASSWORD_PATTERN, ReviewCreate, ReviewCreateResult
+    from alerts import (compose_risk_mail, deliver, last_review_id, risk_email_enabled, risky_reviews_after,
+                            set_risk_email)
+    from insights import REPORT_PERIODS, keyword_surges, period_report
+    from reply_drafts import (SENTIMENT_LABELS, TEMPLATE_MAX_LENGTH, TEMPLATE_PLACEHOLDERS, seller_reply_draft,
+                                  seller_templates, template_problem)
+    from schemas import EMAIL_PATTERN, PASSWORD_MESSAGE, PASSWORD_PATTERN
     from security import hash_password, verify_password
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -432,7 +440,7 @@ def dashboard(request: Request,
 
     return render(request, "dashboard.html", active_menu="dashboard",
                   risky_count=risky_count, recent_reviews=recent_reviews, stats=stats,
-                  todo=dashboard_todo(db, user))
+                  todo=dashboard_todo(db, user), surges=keyword_surges(db, user.id))
 
 
 def dashboard_todo(db: Session, user: User) -> list[dict]:
@@ -518,6 +526,7 @@ def products_upload_template(user: User = Depends(login_required)):
 
 @app.post("/products/upload", name="products_upload")
 async def products_upload(request: Request,
+                          background_tasks: BackgroundTasks,
                           file: Optional[UploadFile] = File(None),
                           user: User = Depends(login_required),
                           db: Session = Depends(get_session)):
@@ -547,6 +556,7 @@ async def products_upload(request: Request,
         flash(request, error, "error")
         return redirect(request, "products")
 
+    before_id = last_review_id(db, user.id)
     log, problems = ingest_rows(db, batch_name=f"upload:{user.id}:{filename}", rows=rows, seller=user)
     added = log.total_count - log.duplicate_count - log.missing_count
     message = f"'{filename}' 업로드 완료: 리뷰 {added:,}건 추가"
@@ -556,6 +566,16 @@ async def products_upload(request: Request,
         shown = ", ".join(problems[:5]) + (f" 외 {len(problems) - 5}건" if len(problems) > 5 else "")
         message += f", 오류 {log.missing_count:,}건 건너뜀 ({shown})"
     flash(request, message + ".", "success" if added else "error")
+
+    # v1.1 위험 리뷰 알림: 새로 들어온 위험 리뷰 안내 + (설정했으면) 응답 후 백그라운드로 메일
+    risky = risky_reviews_after(db, user.id, before_id) if added else []
+    if risky:
+        notice = f"새로 들어온 리뷰 중 위험 리뷰 {len(risky):,}건이 있습니다. CS챗봇에서 먼저 확인해 주세요."
+        if risk_email_enabled(db, user.id):
+            subject, body = compose_risk_mail(user, risky, filename)
+            background_tasks.add_task(deliver, user.email, subject, body)
+            notice += " (알림 메일 발송)"
+        flash(request, notice, "error")
     return redirect(request, "products")
 
 
@@ -955,6 +975,19 @@ CS_LIST_LIMIT = 30
 REPLY_MAX_LENGTH = 2000      # API(ReplyCreate)와 같은 기준
 
 
+# ──────────────────────────────────────────────
+# v1.1 주간 / 월간 리포트  (reports.html) — 'PDF로 저장' 은 브라우저 인쇄(window.print) 사용
+# ──────────────────────────────────────────────
+@app.get("/reports", name="reports", response_class=HTMLResponse)
+def reports_page(request: Request,
+                 period: str = "week",
+                 user: User = Depends(login_required),
+                 db: Session = Depends(get_session)):
+    report = period_report(db, user.id, period)
+    return render(request, "reports.html", active_menu="reports", report=report, periods=REPORT_PERIODS,
+                  generated_at=datetime.now())
+
+
 @app.get("/cschatbot", name="cschatbot", response_class=HTMLResponse)
 def cschatbot_page(request: Request,
                    user: User = Depends(login_required),
@@ -974,7 +1007,8 @@ def cschatbot_page(request: Request,
     )
     total_unreplied = db.scalar(unreplied.with_only_columns(func.count(Review.id)))
 
-    rows = [{"review": r, "draft": generate_reply_draft(r, user.mall_name)[0]} for r in reviews]
+    templates_ = seller_templates(db, user.id)          # v1.1 셀러 답글 템플릿 (없으면 기본 초안)
+    rows = [{"review": r, "draft": seller_reply_draft(r, user, templates_)[0]} for r in reviews]
 
     # 방금 처리 완료한 답글 → '되돌리기' 안내 (본인이 쓴 답글일 때만)
     done_param = request.query_params.get("done", "")
@@ -1042,28 +1076,6 @@ def cschatbot_undo(request: Request,
 
 
 # ──────────────────────────────────────────────
-# 리뷰 등록 API (데이터 적재/테스트용) — 등록 시 자동 분석
-# ──────────────────────────────────────────────
-@app.post("/api/reviews", status_code=201, response_model=ReviewCreateResult)
-def add_review(body: ReviewCreate,
-               user: User = Depends(login_required),
-               db: Session = Depends(get_session)):
-    product = db.get(Product, body.product_id)
-    if product is None:
-        raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
-    if product.seller_id != user.id:
-        raise HTTPException(status_code=403, detail="본인 상품에만 접근할 수 있습니다.")
-
-    review = Review(product_id=product.id, reviewer_name=body.reviewer_name, rating=body.rating,
-                    content_raw=body.content.strip(), reviewed_at=body.reviewed_at or date.today())
-    db.add(review)
-    analysis = analyze_and_save(db, review, seller_risk_keywords(db, user.id))
-    db.commit()
-    return ReviewCreateResult(id=review.id, sentiment=analysis.sentiment, severity=analysis.severity,
-                              issue_type=analysis.issue_type, is_risky=analysis.severity >= RISK_SEVERITY)
-
-
-# ──────────────────────────────────────────────
 # 설정 - 회원정보 수정 / 회원 탈퇴  (informationedit.html)
 # ──────────────────────────────────────────────
 def my_risk_keywords(db: Session, user: User) -> list:
@@ -1071,9 +1083,22 @@ def my_risk_keywords(db: Session, user: User) -> list:
                       .order_by(RiskKeyword.weight.desc(), RiskKeyword.word)).all()
 
 
+TEMPLATE_EXAMPLES = {
+    Polarity.POS: "예) 안녕하세요 {고객명} 고객님, {쇼핑몰명}입니다. {상품명}을(를) 좋게 봐 주셔서 감사합니다!",
+    Polarity.NEU: "예) {기본 답글}\n다음 구매 때 쓰실 수 있는 쿠폰을 쪽지로 보내 드렸어요.",
+    Polarity.NEG: "예) {기본 답글}\n담당자 직통: 1:1 문의 → '빠른 처리' 선택",
+}
+
+
 def render_settings(request: Request, db: Session, user: User, status_code: int = 200) -> HTMLResponse:
+    saved = seller_templates(db, user.id)
+    reply_templates = [{"sentiment": p.value, "label": SENTIMENT_LABELS[p], "example": TEMPLATE_EXAMPLES[p],
+                        "content": saved[p].content if p in saved else ""}
+                       for p in (Polarity.NEG, Polarity.NEU, Polarity.POS)]
     return render(request, "informationedit.html", status_code=status_code, active_menu="settings",
-                  risk_keywords=my_risk_keywords(db, user))
+                  risk_keywords=my_risk_keywords(db, user), risk_email=risk_email_enabled(db, user.id),
+                  reply_templates=reply_templates, template_placeholders=TEMPLATE_PLACEHOLDERS,
+                  template_max_length=TEMPLATE_MAX_LENGTH)
 
 
 @app.get("/settings", name="settings", response_class=HTMLResponse)
@@ -1191,6 +1216,66 @@ def reanalyze(request: Request,
     db.commit()
     flash(request, f"리뷰 {count}건을 현재 위험 키워드로 다시 분석했습니다.")
     return RedirectResponse(f"{request.url_for('settings')}#risk-keywords", status_code=303)
+
+
+# ── v1.1 알림 설정 / 답글 템플릿 (설정 화면) — API(/api/v1/users/me/notifications, /api/v1/reply-templates)와 같은 규칙
+@app.post("/settings/notifications", name="notification_settings")
+def notification_settings(request: Request,
+                          risk_email: str = Form(""),
+                          user: User = Depends(login_required),
+                          db: Session = Depends(get_session)):
+    enabled = risk_email == "1"
+    set_risk_email(db, user.id, enabled)
+    db.commit()
+    flash(request, "위험 리뷰 메일 알림을 " + ("켰습니다." if enabled else "껐습니다."))
+    return RedirectResponse(f"{request.url_for('settings')}#notifications", status_code=303)
+
+
+def _template_sentiment(value: str) -> Optional[Polarity]:
+    try:
+        return Polarity(value)
+    except ValueError:
+        return None
+
+
+@app.post("/settings/reply-templates/{sentiment}", name="reply_template_save")
+def reply_template_save(request: Request,
+                        sentiment: str,
+                        content: str = Form(""),
+                        user: User = Depends(login_required),
+                        db: Session = Depends(get_session)):
+    polarity = _template_sentiment(sentiment)
+    content = content.replace("\r\n", "\n").strip()
+    if polarity is None:
+        flash(request, "템플릿 종류를 찾을 수 없습니다.", "error")
+    elif not content:                                # 비우고 저장 = 기본 초안으로 되돌리기
+        return reply_template_reset(request, sentiment, user, db)
+    elif problem := template_problem(content):
+        flash(request, problem, "error")
+    else:
+        template = seller_templates(db, user.id).get(polarity) or ReplyTemplate(seller_id=user.id, sentiment=polarity)
+        template.content = content
+        db.add(template)
+        db.commit()
+        flash(request, f"{SENTIMENT_LABELS[polarity]} 리뷰 답글 템플릿을 저장했습니다. CS챗봇 초안에 바로 적용됩니다.")
+    return RedirectResponse(f"{request.url_for('settings')}#reply-templates", status_code=303)
+
+
+@app.post("/settings/reply-templates/{sentiment}/reset", name="reply_template_reset")
+def reply_template_reset(request: Request,
+                         sentiment: str,
+                         user: User = Depends(login_required),
+                         db: Session = Depends(get_session)):
+    polarity = _template_sentiment(sentiment)
+    if polarity is None:
+        flash(request, "템플릿 종류를 찾을 수 없습니다.", "error")
+    else:
+        template = seller_templates(db, user.id).get(polarity)
+        if template is not None:
+            db.delete(template)
+            db.commit()
+        flash(request, f"{SENTIMENT_LABELS[polarity]} 리뷰 답글을 기본 초안으로 되돌렸습니다.")
+    return RedirectResponse(f"{request.url_for('settings')}#reply-templates", status_code=303)
 
 
 @app.post("/withdraw", name="withdraw")

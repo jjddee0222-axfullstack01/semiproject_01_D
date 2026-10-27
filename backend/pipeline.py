@@ -21,13 +21,13 @@ from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 try:
-    from .database import analyze_and_save, seller_risk_keywords
+    from .database import analyze_and_save, reanalyze_reviews, seller_risk_keywords
     from .models import IngestLog, Product, Review, ReviewAnalysis, User
 except ImportError:
-    from database import analyze_and_save, seller_risk_keywords
+    from database import analyze_and_save, reanalyze_reviews, seller_risk_keywords
     from models import IngestLog, Product, Review, ReviewAnalysis, User
 
 REQUIRED_COLUMNS = ("product_name", "rating", "content", "reviewed_at")
@@ -203,13 +203,8 @@ def analyze_pending(db: Session, *, limit: int, reanalyze_model_version: Optiona
     reviews = db.scalars(
         select(Review).outerjoin(ReviewAnalysis, ReviewAnalysis.review_id == Review.id)
         .where(condition).order_by(Review.id).limit(limit)
+        .options(selectinload(Review.analysis), selectinload(Review.keyword_links), selectinload(Review.product))
     ).all()
-
-    cache: dict[int, list[tuple[str, int]]] = {}
-    for review in reviews:
-        seller_id = review.product.seller_id
-        if seller_id not in cache:
-            cache[seller_id] = seller_risk_keywords(db, seller_id)
-        analyze_and_save(db, review, cache[seller_id])
+    count = reanalyze_reviews(db, reviews)
     db.commit()
-    return len(reviews)
+    return count

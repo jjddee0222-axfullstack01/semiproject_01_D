@@ -16,13 +16,14 @@ PIN POINT REVIEW - Pydantic v2 스키마 (API 요청 / 응답)
   0. 공통 (기반 클래스, 페이지네이션, 기간·상품 필터, 오류)
   1. 인증·계정        /auth/*, /users/me
   2. 상품            /products
-  3. 리뷰·블라인드    /products/{id}/reviews, /reviews/{id}, /reviews/{id}/blind
+  3. 리뷰·블라인드    /products/{id}/reviews, /reviews, /reviews/{id}, /reviews/{id}/blind
   4. CS 답글         /reviews/{id}/replies, /replies/{id}
   5. 통계·대시보드    /stats/*
   6. 위험 키워드      /risk-keywords
   7. 내보내기·LLM    /exports/*, /reviews/{id}/reply-suggestions
   8. 데이터 파이프라인 /internal/*
   9. 현재 화면 전용   리뷰 등록 API, 의견 보내기
+ 10. v1.1 추가       /users/me/notifications, /stats/keyword-surges, /reply-templates
 """
 from __future__ import annotations
 
@@ -554,7 +555,7 @@ class AnalyzeResult(ResponseModel):
 # 9. 현재 화면 전용 (API 명세 외)
 # ══════════════════════════════════════════════
 class ReviewCreate(RequestModel):
-    """POST /api/reviews — 리뷰 등록 (테스트·연동용). 등록 즉시 자동 분석"""
+    """POST /api/v1/reviews — 리뷰 1건 등록 (연동·테스트용). 등록 즉시 자동 분석 (v1.1: 옛 /api/reviews 에서 이동)"""
     product_id: int = Field(..., ge=1)
     content: str = Field(..., min_length=1, max_length=5000)
     rating: int = Field(..., ge=1, le=5)
@@ -580,3 +581,36 @@ class ReviewCreateResult(ResponseModel):
 # 자기 자신·뒤쪽 클래스를 참조하는 스키마 완성
 ReplyOut.model_rebuild()
 ReviewDetailOut.model_rebuild()
+
+
+# ══════════════════════════════════════════════
+# 10. v1.1 추가 — 알림 설정 / 키워드 급증 / 답글 템플릿
+# ══════════════════════════════════════════════
+class NotificationSettingsIn(RequestModel):
+    risk_email: bool = Field(description="CSV 업로드 후 위험 리뷰가 새로 들어오면 가입 이메일로 알림")
+
+
+class NotificationSettingsOut(ResponseModel):
+    risk_email: bool
+
+
+class KeywordSurgeQuery(RequestModel):
+    limit: int = Field(5, ge=1, le=20)
+
+
+class KeywordSurgeItem(ResponseModel):
+    word: str
+    current: int = Field(description="최근 7일(오늘 포함) 등장 리뷰 수")
+    previous: int = Field(description="그 전 7일 등장 리뷰 수")
+    ratio: Optional[float] = Field(description="current / previous (이전 0건이면 null = 새로 등장)")
+
+
+class ReplyTemplateIn(RequestModel):
+    content: str = Field(min_length=1, max_length=2000,
+                         description="자리 표시자: {고객명} {쇼핑몰명} {상품명} {기본 답글}")
+
+
+class ReplyTemplateOut(ResponseModel):
+    sentiment: Polarity
+    content: str
+    updated_at: datetime

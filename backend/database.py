@@ -75,11 +75,24 @@ def reanalyze_seller_reviews(db: Session, seller_id: int, words: Optional[list[s
         if not words:
             return 0
         stmt = stmt.where(or_(*(Review.content_raw.contains(w, autoescape=True) for w in words)))
-    keywords = seller_risk_keywords(db, seller_id)
-    reviews = db.scalars(stmt).all()
+    return reanalyze_reviews(db, db.scalars(stmt).all())
+
+
+def reanalyze_reviews(db: Session, reviews) -> int:
+    """리뷰 목록을 각 셀러의 현재 위험 키워드로 다시 분석하고 건수를 반환 (commit 은 호출한 쪽에서)
+
+    위험 키워드는 셀러마다 한 번만 읽는다. 재분석이 필요한 곳(키워드 변경, 규칙 버전 변경, 내부 분석 API)이
+    모두 이 함수를 쓰도록 한 곳에 모음 (예전에는 database·pipeline 에 같은 반복문이 두 번 있었음)
+    """
+    cache: dict[int, list[tuple[str, int]]] = {}
+    count = 0
     for review in reviews:
-        analyze_and_save(db, review, keywords)
-    return len(reviews)
+        seller_id = review.product.seller_id
+        if seller_id not in cache:
+            cache[seller_id] = seller_risk_keywords(db, seller_id)
+        analyze_and_save(db, review, cache[seller_id])
+        count += 1
+    return count
 
 
 def _save_keywords(db: Session, review: Review, found: list) -> None:
@@ -114,13 +127,7 @@ def reanalyze_outdated(db: Session) -> int:
         select(Review).join(Review.analysis).where(ReviewAnalysis.model_version != MODEL_VERSION)
         .options(selectinload(Review.analysis), selectinload(Review.keyword_links), selectinload(Review.product))
     ).all()
-    cache: dict[int, list[tuple[str, int]]] = {}
-    for review in reviews:
-        seller_id = review.product.seller_id
-        if seller_id not in cache:
-            cache[seller_id] = seller_risk_keywords(db, seller_id)
-        analyze_and_save(db, review, cache[seller_id])
-    return len(reviews)
+    return reanalyze_reviews(db, reviews)
 
 
 def _seed(db: Session) -> None:

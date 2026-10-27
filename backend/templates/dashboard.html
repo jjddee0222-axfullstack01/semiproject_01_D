@@ -258,6 +258,51 @@
             color: #111111;
         }
 
+        /* v1.1 부정 키워드 급증 */
+        .surge-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .surge-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            background: #FFF5F5;
+            color: #333333;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .surge-row:hover {
+            background: #FFE3E3;
+        }
+
+        .surge-word {
+            font-weight: 700;
+            color: #C92A2A;
+        }
+
+        .surge-trend {
+            font-size: 12px;
+            color: #495057;
+        }
+
+        .surge-empty,
+        .surge-guide {
+            font-size: 13px;
+            color: #868E96;
+        }
+
+        .surge-guide {
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
         @media (max-width: 1100px) {
             .todo-grid { grid-template-columns: 1fr 1fr; }
         }
@@ -301,6 +346,25 @@
                         ✅ 감지된 위험 리뷰가 없습니다.
                         {% endif %}
                     </div>
+                </div>
+
+                <!-- v1.1 부정 키워드 급증: 최근 7일 vs 이전 7일 -->
+                <div class="card surge-card">
+                    <div class="card-title">급증한 부정 키워드</div>
+                    {% if surges %}
+                    <div class="surge-list">
+                        {% for s in surges %}
+                        <a class="surge-row" href="{{ url_for('review_list') }}?q={{ s.word|urlencode }}&period=7">
+                            <span class="surge-word">‘{{ s.word }}’</span>
+                            <span class="surge-trend">최근 7일 {{ s.current }}건 · 이전 7일 {{ s.previous }}건
+                                {% if s.ratio %}(×{{ s.ratio }}){% else %}(새로 등장){% endif %}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="surge-empty">✅ 최근 7일 동안 갑자기 늘어난 부정 키워드가 없습니다.</div>
+                    {% endif %}
+                    <div class="surge-guide">최근 7일에 3건 이상 나오고, 이전 7일보다 2배 이상 늘어난 부정 키워드를 보여 줍니다.</div>
                 </div>
 
                 <div class="card">

@@ -2,6 +2,8 @@
 
 자동 생성 문서(Swagger UI): 서버 실행 후 `/docs` · 응답 형식 정의: `backend/schemas.py`
 
+**엔드포인트 수:** `/api/v1` 41개 = v1.0.0 34개 + v1.1 7개 (`POST /reviews` 이전 + 아래 11장 6개). v1.1 에서 `/api/v1` 밖에 있던 옛 리뷰 등록 API `POST /api/reviews` 는 삭제하고 `POST /api/v1/reviews` 로 옮겼습니다 (화면에서는 쓰지 않던 API).
+
 ## 공통
 
 | 항목 | 내용 |
@@ -44,6 +46,7 @@
 | 메서드 | 경로 | 설명 | 응답 |
 | --- | --- | --- | --- |
 | GET | `/products/{product_id}/reviews` | 상품별 리뷰 목록 (평점, 작성일, 본문, 감성, 상태). 필터: `status=VISIBLE | BLINDED |
+| POST | `/reviews` | (v1.1, 옛 `POST /api/reviews` 이전) 리뷰 1건 등록 후 바로 분석 (body: product_id, rating, content, 선택 reviewer_name·reviewed_at) → `{id, sentiment, severity, issue_type, is_risky}` | 201 / 403(타인 상품) / 404(`PRODUCT_NOT_FOUND`) / 422 |
 | GET | `/reviews/{review_id}` | 리뷰 상세 (분석 결과, 키워드, 답글 포함) | 200 / 403 / 404 |
 | **POST** | **`/reviews/{review_id}/blind`** | **악성 리뷰 블라인드 (body: `reason` 필수)** | 200 / **403(타인 상품)** / 404 / 409(이미 블라인드) / 422(사유 누락) |
 | DELETE | `/reviews/{review_id}/blind` | 블라인드 해제(복구) | 200 / 403 / 404 / 409(블라인드 상태 아님) |
@@ -88,7 +91,7 @@
 | --- | --- | --- | --- | --- |
 | GET | `/exports/stats.csv` | 통계 CSV 다운로드 (필터 동일) | Should | T-306 |
 | GET | `/exports/reviews.csv` | 분석된 리뷰 CSV 다운로드 | Should |  |
-| POST | `/reviews/{review_id}/reply-suggestions` | 부정·중립 리뷰에 대한 답글 초안 생성 (이슈 유형·감성별 템플릿, `llm_model = template-v1`. LLM 연동은 이번 범위 제외) · 긍정 리뷰는 409 | Could | US-16 |
+| POST | `/reviews/{review_id}/reply-suggestions` | 부정·중립 리뷰에 대한 답글 초안 생성 (이슈 유형·감성별 템플릿, `llm_model = template-v1`. 셀러가 v1.1 답글 템플릿을 저장해 두었으면 그 템플릿으로 만들고 `llm_model = seller-template-v1`. LLM 연동은 이번 범위 제외) · 긍정 리뷰는 409 | Could | US-16 |
 | GET | `/reviews/{review_id}/reply-suggestions` | 생성 이력 조회 | Could | US-16 |
 
 ## 8. 데이터 파이프라인 (E4, 내부용 / 외부 노출 금지)
@@ -105,6 +108,19 @@
 | --- | --- | --- | --- |
 | POST | `/email-code` | 이메일 인증 코드 발송 (body: `{purpose: signup\|reset, email}`). 10분 유효, 재발송 60초 뒤, 이메일당 1시간 5회·IP당 20회(`.env` 로 조정). 로컬 개발 모드(`MAIL_HOST` 없음, `COOKIE_SECURE=0`)에서만 응답에 `dev_code` 포함 | 200 / 400 / 409(가입된 이메일로 signup) / 429 / 503(운영 설정인데 메일 서버 미설정) |
 | POST | `/logout` | 화면 로그아웃 (세션 삭제·쿠키 만료 후 로그인 화면). `GET /logout` 은 로그아웃하지 않음 (다른 사이트가 몰래 로그아웃시키는 것 방지) | 303 |
+
+## 11. v1.1 추가 (알림 · 키워드 급증 · 답글 템플릿)
+
+| 메서드 | 경로 | 설명 | 응답 | FR |
+| --- | --- | --- | --- | --- |
+| GET | `/users/me/notifications` | 내 알림 설정 `{risk_email}` (설정한 적 없으면 `false`) | 200 | FR-28 |
+| PUT | `/users/me/notifications` | 알림 설정 저장 (body: `{risk_email: bool}`). 켜 두면 CSV 업로드에서 새 위험 리뷰가 나왔을 때 가입 이메일로 알림 (메일 서버가 없으면 서버 콘솔 출력) | 200 / 422 | FR-28 |
+| GET | `/stats/keyword-surges` | 급증한 부정 키워드 `[{word, current, previous, ratio}]` (`?limit=5`, 1~20). 최근 7일 3건 이상 + 이전 7일보다 2배 이상(이전 0건이면 `ratio: null` = 새로 등장), 블라인드 제외 | 200 / 422 | FR-29 |
+| GET | `/reply-templates` | 내 답글 템플릿 목록 `[{sentiment, content, updated_at}]` (저장한 것만, 부정→중립→긍정 순) | 200 | FR-31 |
+| PUT | `/reply-templates/{sentiment}` | 템플릿 저장·수정 (`sentiment` = POS / NEU / NEG, body: `{content}` 1~2,000자). 자리 표시자는 `{고객명}` `{쇼핑몰명}` `{상품명}` `{기본 답글}` 만 허용 | 200 / 422(`INVALID_TEMPLATE`, `VALIDATION_ERROR`) | FR-31 |
+| DELETE | `/reply-templates/{sentiment}` | 템플릿 삭제 → 기본 초안으로 | 204 / 404(`REPLY_TEMPLATE_NOT_FOUND`) | FR-31 |
+
+화면: 대시보드 '급증한 부정 키워드' 카드, 설정 '알림 설정'·'답글 템플릿' 카드, 리포트 `/reports?period=week|month` (FR-30, API 없이 화면에서 인쇄 → PDF 저장)
 
 ## 10. 응답 예시 (실제 응답)
 

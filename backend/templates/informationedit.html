@@ -306,6 +306,86 @@
             font-size: 12px;
             color: #868E96;
         }
+        /* v1.1 알림 설정 · 답글 템플릿 */
+        .notify-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .notify-row label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #333333;
+            cursor: pointer;
+        }
+
+        .notify-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #111111;
+        }
+
+        .template-item {
+            margin-top: 18px;
+        }
+
+        .template-item:first-of-type {
+            margin-top: 0;
+        }
+
+        .template-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .template-head .state {
+            font-size: 12px;
+            font-weight: 500;
+            color: #868E96;
+        }
+
+        .template-head .state.custom {
+            color: #2B8A3E;
+        }
+
+        .template-item textarea {
+            width: 100%;
+            min-height: 96px;
+            padding: 12px 14px;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #333333;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .template-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .placeholder-chips code {
+            display: inline-block;
+            margin: 2px 4px 2px 0;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #F1F3F5;
+            font-size: 12px;
+            color: #495057;
+        }
     </style>
 </head>
 <body>
@@ -401,7 +481,45 @@
                 <button type="submit" class="btn-secondary">전체 리뷰 다시 분석</button>
             </form>
         </div>
+        <!-- v1.1 알림 설정: CSV 업로드에서 위험 리뷰가 새로 발견되면 가입 이메일로 알림 -->
+        <div class="card" id="notifications">
+            <div class="card-title">알림 설정</div>
+            <form class="notify-row" method="post" action="{{ url_for('notification_settings') }}">
+                <label>
+                    <input type="checkbox" name="risk_email" value="1" {{ 'checked' if risk_email }}>
+                    리뷰 CSV 업로드 후 위험 리뷰가 새로 발견되면 이메일({{ current_user.email }})로 알림 받기
+                </label>
+                <button type="submit" class="btn-secondary">저장</button>
+            </form>
+        </div>
+
+        <!-- v1.1 답글 템플릿: CS챗봇 초안을 우리 몰 말투로 -->
+        <div class="card" id="reply-templates">
+            <div class="card-title">답글 템플릿</div>
+            <div class="card-guide">
+                CS챗봇의 답글 초안을 우리 쇼핑몰 말투로 바꿀 수 있습니다. 비워 두면 기본 초안을 사용합니다.<br>
+                <span class="placeholder-chips">사용 가능한 자리 표시자:
+                {% for p in template_placeholders %}<code>{{ p }}</code>{% endfor %}</span>
+                — <code>{기본 답글}</code> 자리에는 리뷰 내용(이슈 유형·평점)에 맞춘 기본 초안이 들어갑니다.
+            </div>
+            {% for t in reply_templates %}
+            <form class="template-item" method="post" action="{{ url_for('reply_template_save', sentiment=t.sentiment) }}">
+                <div class="template-head">
+                    <span>{{ t.label }} 리뷰 답글</span>
+                    <span class="state {{ 'custom' if t.content }}">{{ '내 템플릿 사용 중' if t.content else '기본 초안 사용 중' }}</span>
+                </div>
+                <textarea name="content" maxlength="{{ template_max_length }}" aria-label="{{ t.label }} 리뷰 답글 템플릿"
+                          placeholder="{{ t.example }}">{{ t.content }}</textarea>
+                <div class="template-actions">
+                    {% if t.content %}
+                    <button type="submit" class="btn-secondary" formaction="{{ url_for('reply_template_reset', sentiment=t.sentiment) }}" formnovalidate>기본으로 되돌리기</button>
+                    {% endif %}
+                    <button type="submit" class="btn-save">저장</button>
+                </div>
+            </form>
+            {% endfor %}
+        </div>
     </main>
 
 </body>
-</html>
+</html>

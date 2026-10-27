@@ -1,5 +1,6 @@
 -- PIN POINT REVIEW : MariaDB 10.5+ DDL (backend/models.py 에서 자동 생성, 참고용)
 -- 실제 테이블은 서버 시작 시 자동 생성됩니다. 계정·DB 생성은 setup_mariadb.sql 참고
+-- 버전 기록·변경은 Alembic: cd backend → python -m alembic upgrade head  (README 참고)
 
 CREATE TABLE users (
 	id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, 
@@ -197,3 +198,24 @@ CREATE TABLE reply_suggestions (
 
 CREATE INDEX ix_reply_suggestions_review_created ON reply_suggestions (review_id, created_at);
 
+
+-- ── v1.1 추가 (migrations/versions/0002_v1_1_notifications_reply_templates.py) ──
+
+CREATE TABLE notification_settings (
+	seller_id BIGINT UNSIGNED NOT NULL, 
+	risk_email BOOL NOT NULL DEFAULT '0', 
+	updated_at DATETIME NOT NULL DEFAULT now(), 
+	PRIMARY KEY (seller_id), 
+	FOREIGN KEY(seller_id) REFERENCES users (id) ON DELETE CASCADE
+)ENGINE=InnoDB CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE reply_templates (
+	id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, 
+	seller_id BIGINT UNSIGNED NOT NULL, 
+	sentiment ENUM('POS','NEG','NEU') NOT NULL, 
+	content TEXT NOT NULL, 
+	updated_at DATETIME NOT NULL DEFAULT now(), 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_reply_templates_seller_sentiment UNIQUE (seller_id, sentiment), 
+	FOREIGN KEY(seller_id) REFERENCES users (id) ON DELETE CASCADE
+)ENGINE=InnoDB CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci;

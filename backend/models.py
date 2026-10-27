@@ -15,6 +15,8 @@ ERD에 없는 것 중 이 파일에서 추가한 것 (문서 정책 근거)
   - UNIQUE : risk_keywords(seller_id, word)  ← API "409(중복)"
   - INDEX  : 상품·기간 집계, 위험 리뷰 정렬, 세션 만료 정리용
   - 보조 테이블 3개 (현재 화면용, 맨 아래): shop_monthly_stats, product_monthly_stats, feedbacks
+  - v1.1 추가 2개 (맨 아래): notification_settings(위험 리뷰 메일 알림), reply_templates(셀러 답글 템플릿)
+    → 마이그레이션: migrations/versions/0002_*.py
 """
 from __future__ import annotations
 
@@ -23,7 +25,7 @@ import hashlib
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import (JSON, BigInteger, CheckConstraint, Date, DateTime, Enum, Float,
+from sqlalchemy import (JSON, BigInteger, Boolean, CheckConstraint, Date, DateTime, Enum, Float,
                         ForeignKey, Index, Integer, SmallInteger, String, Text,
                         UniqueConstraint, func, select)
 from sqlalchemy.dialects import mysql
@@ -439,3 +441,33 @@ class Feedback(Base):
     complaint: Mapped[str] = mapped_column(Text, nullable=False)                          # 불편 사항
     suggestion: Mapped[str] = mapped_column(Text, nullable=False)                         # 기타 제안 사항
     created_at: Mapped[datetime] = _now()
+
+
+# ══════════════════════════════════════════════
+# v1.1 — NOTIFICATION_SETTINGS / REPLY_TEMPLATES
+# ══════════════════════════════════════════════
+class NotificationSetting(Base):
+    """셀러 알림 설정 (행이 없으면 모두 꺼짐). 탈퇴 시 users 삭제와 함께 CASCADE"""
+    __tablename__ = "notification_settings"
+    __table_args__ = (MYSQL_OPTS,)
+
+    seller_id: Mapped[int] = mapped_column(ID, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    risk_email: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)  # 업로드 후 위험 리뷰 메일
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(),
+                                                 nullable=False)
+
+
+class ReplyTemplate(Base):
+    """셀러가 직접 쓴 답글 템플릿 — 감성(POS/NEU/NEG)마다 1개. 없으면 기본 템플릿(reply_drafts) 사용"""
+    __tablename__ = "reply_templates"
+    __table_args__ = (
+        UniqueConstraint("seller_id", "sentiment", name="uq_reply_templates_seller_sentiment"),
+        MYSQL_OPTS,
+    )
+
+    id: Mapped[int] = mapped_column(ID, primary_key=True, autoincrement=True)
+    seller_id: Mapped[int] = mapped_column(ID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    sentiment: Mapped[Polarity] = mapped_column(_enum(Polarity, "template_sentiment"), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)                            # 최대 2,000자 (API 검증)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(),
+                                                 nullable=False)

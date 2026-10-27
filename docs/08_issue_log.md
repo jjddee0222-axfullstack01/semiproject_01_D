@@ -11,7 +11,7 @@
 |---|---|---|
 | 높음 | 6 | 모두 해결 |
 | 중간 | 15 | 모두 해결 |
-| 낮음 | 12 | 모두 해결 |
+| 낮음 | 14 | 모두 해결 |
 
 ## 이슈 목록
 
@@ -50,6 +50,8 @@
 | I-31 | 10일차 배포 (2026-10-20) | 중간 | Railway 첫 배포에서 서버가 `uvicorn: command not found` 로 시작되지 않음 | `requirements.txt` 가 저장소 최상위가 아니라 `backend/` 안에 있어, 빌드 단계에서 패키지 설치가 건너뛰어짐 | 웹 서비스 Settings 의 Root Directory 를 `backend` 로 지정 (`10_deployment.md` 5장) | 빌드 로그에 패키지 설치 기록, 서버 시작 로그 `Application startup complete` |
 | I-32 | 10일차 배포 | 중간 | 서버 시작 시 `[DB 연결 실패] ... @:3306` — DB 주소의 호스트가 비어 `localhost` 로 접속을 시도함 | `DATABASE_URL` 의 `${{MariaDB.RAILWAY_PRIVATE_DOMAIN}}` 참조가 서비스 이름과 맞지 않아 빈 값으로 바뀜 | MariaDB 서비스의 Private Networking 주소(`mariadb.railway.internal`)를 직접 입력 (`10_deployment.md` 4장) | 시작 로그 `[PIN POINT] DB: mariadb+pymysql://pinpoint:***@mariadb.railway.internal:3306/...`, `/api/v1/health` → `database: ok` |
 | I-33 | 10일차 MariaDB 전체 테스트 (2026-10-21) | 낮음 | 테스트를 실제 MariaDB(`TEST_DATABASE_URL`)로 돌리면 347개 중 11개 실패. 배포 서버는 모든 기능 정상 | **테스트 코드의 DB 차이**: ① 테스트가 확인용으로 여는 세션이 MariaDB 기본 격리 수준(REPEATABLE READ) 때문에 화면 요청이 저장한 값을 못 봄(8건) ② MariaDB 는 CHECK 제약 위반을 `IntegrityError` 가 아니라 `OperationalError`(4025)로 알림(3건, 저장 거부 자체는 정상) ③ 범위를 넘는 ID 의 오류 코드가 SQLite 와 다름(1건, 둘 다 404). 서버 코드는 요청마다 새 세션을 쓰므로 영향 없음 | 테스트 세션을 READ COMMITTED 로 열고(`conftest.session`), 제약 위반은 두 예외 모두 허용, ID 범위 초과는 두 오류 코드 모두 허용. 서버 코드 변경 없음 | MariaDB·SQLite 양쪽에서 전체 pytest |
+| I-34 | v1.1 정리 (2026-10-27) | 낮음 | `/api/v1` 밖에 옛 리뷰 등록 API `POST /api/reviews` 가 남아 있어 API 가 두 갈래 (오류 형식·문서 위치가 다름) | 초기 화면용 API 를 `/api/v1` 도입 후에도 유지 | `POST /api/v1/reviews` 로 옮기고 옛 경로 삭제 (화면에서는 사용하지 않음). 소유권 403·`{code, message}` 형식 적용 | `test_api_products_reviews.py::test_review_create_*`, `test_legacy_review_api_removed` |
+| I-35 | v1.1 정리 (2026-10-27) | 낮음 | 재분석 반복문이 `database`·`pipeline` 두 곳에 따로 있어, 한쪽만 고치면 결과가 달라질 위험. 내부 분석 API 는 리뷰마다 위험 키워드를 다시 조회 | 기능을 추가하면서 비슷한 코드를 복사 | `database.reanalyze_reviews` 하나로 합치고 셀러별 키워드는 한 번만 조회, 관계는 `selectinload` 로 미리 읽음 | 기존 재분석 테스트 전체 통과 (키워드 변경·규칙 버전·내부 분석 API) |
 
 ## 남은 위험 (알고 있지만 이번 범위에서 두는 것)
 
@@ -58,4 +60,5 @@
 | 시도 제한 기록이 서버 메모리에 있음 | 서버를 재시작하면 잠금·인증 코드가 초기화됨. 여러 프로세스로 실행하면 따로 셈 | 프로세스 1개로 운영 (`10_deployment.md`). 규모가 커지면 Redis 등 공유 저장소 |
 | 이메일 기준 잠금 | 남의 이메일로 일부러 틀려서 그 사람의 로그인을 10분 막을 수 있음 | 잠금 시간을 짧게(10분) 유지. 운영 시 IP 기준 강화나 CAPTCHA 검토 |
 | 분석이 규칙 기반 | 반어법·문맥은 판단하지 못함 | LLM·감성 모델 연동은 이번 범위 제외. `analyze_review()` 만 바꾸면 되도록 구조화 |
-| 옛 API `POST /api/reviews` | `/api/v1` 과 별도로 남아 있는 리뷰 추가 API (화면에서 쓰지 않음) | 기존 URL 변경 금지 규칙에 따라 유지. 다음 버전에서 정리 |
+| ~~옛 API `POST /api/reviews`~~ | v1.1 에서 `POST /api/v1/reviews` 로 옮기고 삭제 (I-34) | 해결 |
+| (v1.1) 알림 메일은 서버 안 백그라운드 작업 | 응답 직후 같은 프로세스에서 보내므로, 그 사이 서버가 재시작되면 그 메일은 보내지 않음. 발송 실패는 콘솔 기록만 | 업로드 화면 안내는 항상 표시되므로 놓쳐도 확인 가능. 규모가 커지면 작업 큐(Celery 등) |

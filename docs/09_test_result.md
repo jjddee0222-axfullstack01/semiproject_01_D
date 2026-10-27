@@ -13,11 +13,11 @@
 
 | 구분 | 결과 |
 |---|---|
-| 자동 테스트 | **347개 중 347개 통과** (실패 0, 건너뜀 0) |
+| 자동 테스트 | **379개 중 379개 통과** (실패 0, 건너뜀 0) — v1.0.0 347개 + v1.1 32개 (2026-10-27, 2장 마지막 문단) |
 | 사용자 시나리오 | **12개 중 12개 통과** (S-01 \~ S-12, 9일차 코드로 다시 실행. S-01 로그아웃은 사이드바 버튼(POST)으로) |
 | Must 기능(FR-01\~08) 정상 동작률 | **100%** |
 | MariaDB 호환 | 테스트 중 실행된 SQL 33,657건을 MariaDB 방언으로 생성 → 오류 0건 |
-| 발견·해결한 문제 | 33건 (높음 6, 중간 15, 낮음 12) — 모두 해결 |
+| 발견·해결한 문제 | 35건 (높음 6, 중간 15, 낮음 14) — 모두 해결 (v1.1 정리 I-34·I-35 포함) |
 | 배포 환경 | Railway + MariaDB 11 에서 서버 시작·DB 연결 확인 (2026-10-20, 6장) |
 | 정적 점검 (Dead Code·중복 코드) | 쓰이지 않는 코드 1건 삭제, 중복 2곳 확인 (5장) |
 
@@ -25,14 +25,14 @@
 
 ```
 cd backend && python -m pytest
-347 passed
+379 passed
 ```
 
 | 단계 | 테스트 수 | 결과 |
 |---|---|---|
-| 단위 (`-m unit`) | 52 | 통과 |
-| API (`-m api`) | 61 | 통과 |
-| 화면·통합 (`-m pages`) | 223 | 통과 |
+| 단위 (`-m unit`) | 55 | 통과 |
+| API (`-m api`) | 85 | 통과 |
+| 화면·통합 (`-m pages`) | 228 | 통과 |
 | DB 모델 (`test_models.py`) | 11 | 통과 |
 
 | 파일 | 수 | 파일 | 수 |
@@ -40,16 +40,18 @@ cd backend && python -m pytest
 | `test_unit.py` | 24 | `test_pages.py` | 28 |
 | `test_schemas.py` | 25 | `test_pages_analysis_cs.py` | 20 |
 | `test_models.py` | 11 | `test_pages_day6.py` | 21 |
-| `test_mariadb_sql.py` | 3 | `test_pages_upload.py` | 15 |
+| `test_mariadb_sql.py` (17개 테이블) | 3 | `test_pages_upload.py` | 15 |
 | `test_api_auth.py` | 10 | `test_pages_review_filter.py` | 13 |
-| `test_api_products_reviews.py` | 17 | `test_pages_password_reset.py` | 13 |
+| `test_api_products_reviews.py` | 19 | `test_pages_password_reset.py` | 13 |
 | `test_api_replies.py` | 4 | `test_pages_email_verify.py` | 12 |
 | `test_api_stats.py` | 11 | `test_pages_extra.py` | 34 |
 | `test_api_risk_keywords.py` | 5 | `test_neutral_sentiment.py` | 3 |
 | `test_api_exports_suggestions.py` | 5 | `test_security_limits.py` | 16 |
 | `test_api_internal.py` | 9 | `test_review_fixes.py` | 23 |
 | `test_agent_task_day8.py` | 13 | `test_day9_fixes.py` | 12 |
-| | | **합계** | **347** |
+| `test_api_v11_alerts_templates.py` (v1.1) | 22 | `test_pages_v11_reports.py` (v1.1) | 5 |
+| `test_migrations.py` (v1.1) | 3 | | |
+| | | **합계** | **379** |
 
 **회귀 확인:** 7일차 1차 점검 수정 전 276개 → 수정 후 298개 (새 테스트 22개). 중립 분류 도입으로 실패한 기존 테스트 9건은 오류가 아니라 의도한 숫자 변화라서 기대값을 새 규칙에 맞춰 고쳤습니다 (예: 데모 데이터 부정 비율 0.5455 → 0.2727, 상품 A 부정 리뷰 3 → 1).
 
@@ -58,6 +60,14 @@ cd backend && python -m pytest
 **8일차 Agent Task:** CSV 입력 검증 테스트 10개와 상태 확인 API 테스트 3개(`test_agent_task_day8.py`)를 더해 322개 → 335개. 기존 테스트 1건(`test_upload_reports_bad_rows`)은 오류 문구가 "평점은 1\~5" → "평점은 1\~5 정수"로 바뀌어 기대값만 고쳤습니다.
 
 **9일차 통합 점검:** I-26\~I-30 수정 테스트 12개(`test_day9_fixes.py`)를 더해 335개 → 347개. 새 테스트 중 11개는 고치기 전 코드에서 실패하는 것을 먼저 확인했습니다 (나머지 1개는 원래 되던 POST 로그아웃을 지키는 테스트). 기존 테스트 3곳은 로그아웃을 GET → POST 로, 1곳은 설정 화면의 '비밀번호 확인' 값을 추가하도록 고쳤습니다.
+
+**v1.1 고도화 (2026-10-27):** 347개 → 379개 (+32).
+- 정리: 옛 `POST /api/reviews` 테스트 1개를 `POST /api/v1/reviews` 테스트 3개(분석 결과·소유권 403/404·옛 경로 삭제 확인)로 교체 (+2). 다른 파일 2곳은 주소만 `/api/v1/reviews` 로 변경
+- Alembic `test_migrations.py` 3개: 빈 DB `upgrade head` 후 `alembic check`(모델과 일치), `create_all` 로 만든 기존 DB 에 `upgrade head`, `downgrade base`
+- 알림·급증·템플릿 `test_api_v11_alerts_templates.py` 22개: 알림 설정 API·화면, 업로드 후 위험 리뷰 안내, 메일 발송(개발 모드 콘솔·SMTP 설정 시 발송·발송 실패해도 업로드 정상·중복 업로드 재알림 없음·작성자 이름 가림), 탈퇴 시 설정 삭제, 급증 감지(×3 / 블라인드·다른 셀러 제외 / 기준 미달), 템플릿 CRUD·검증(알 수 없는 자리 표시자·2,000자·빈 값)·소유권·답글 추천과 CS챗봇 적용
+- 리포트 `test_pages_v11_reports.py` 5개: 로그인 필요, 주간 기본·월간·잘못된 기간, 지표 계산(전기간 대비), 블라인드·다른 셀러 제외
+- 기존 테스트 변경: `test_mariadb_sql.py` 의 테이블 수 15 → 17 (새 테이블 2개, 기대값만 변경)
+- CI: `.github/workflows/tests.yml` 이 push·PR 마다 SQLite 전체 + MariaDB 11 컨테이너(마이그레이션 `upgrade → current → downgrade` 후 전체, 모델 일치 검사 `alembic check` 는 SQLite job 의 `test_migrations.py`)를 실행
 
 ## 3. 사용자 시나리오
 
@@ -89,6 +99,10 @@ cd backend && python -m pytest
 | FR-20\~25 (비밀번호 변경·이메일 인증·리뷰 목록·업로드 이력·처리할 일·모바일) | `test_pages_password_reset.py`, `test_pages_email_verify.py`, `test_pages_extra.py`, S-03·S-09·S-11 | 통과 |
 | FR-26 중립 분류 | `test_unit.py`, `test_neutral_sentiment.py`, S-06·S-07·S-09 | 통과 |
 | FR-27 위험 키워드 즉시 반영 | `test_pages_day6.py`, `test_api_risk_keywords.py`, S-08 | 통과 |
+| FR-28 위험 리뷰 알림 (v1.1) | `test_api_v11_alerts_templates.py` (notification·upload) | 통과 |
+| FR-29 부정 키워드 급증 (v1.1) | `test_api_v11_alerts_templates.py` (keyword_surge) | 통과 |
+| FR-30 주간·월간 리포트 (v1.1) | `test_pages_v11_reports.py`, 인쇄 미리보기(A4 PDF 2쪽) 확인 | 통과 |
+| FR-31 답글 템플릿 (v1.1) | `test_api_v11_alerts_templates.py` (reply_template·cschatbot) | 통과 |
 | NFR-01\~11 보안·품질 | `test_security_limits.py`, `test_review_fixes.py`, `test_unit.py`, `test_models.py`, S-02·S-12 | 통과 |
 
 ## 5. 정적 점검 (9일차 기준: Dead Code·중복 코드 탐색)
@@ -100,9 +114,9 @@ cd backend && python -m pytest
 | 쓰이지 않는 코드 | `schemas.FeedbackCreate` (의견 보내기를 화면 폼으로만 구현하면서 남음) | 삭제 (I-25) |
 | 오탐 | `db._sqlite_foreign_keys` — DB 연결 이벤트로 호출됨 | 유지 |
 | 쓰이지 않는 템플릿 | 없음 (20개 모두 사용) | - |
-| 중복 코드 | `database.reanalyze_outdated` 와 `pipeline.analyze_pending` 의 '셀러별 위험 키워드 캐시 + 재분석' 반복문 | 동작이 같아 다음 리팩토링 후보로 기록 (발표 전에는 건드리지 않음) |
+| 중복 코드 | `database.reanalyze_outdated` 와 `pipeline.analyze_pending` 의 '셀러별 위험 키워드 캐시 + 재분석' 반복문 | v1.1 에서 `database.reanalyze_reviews` 로 합침 (I-35) |
 | 중복 코드 | `main.py` 상품별 대시보드·리뷰 목록의 필터 매개변수 목록 | 화면마다 필터가 조금 달라 유지 |
-| 옛 API | `POST /api/reviews` (`/api/v1` 밖, 화면에서 사용 안 함) | 기존 URL 변경 금지 규칙에 따라 유지, 다음 버전에서 정리 |
+| 옛 API | `POST /api/reviews` (`/api/v1` 밖, 화면에서 사용 안 함) | v1.1 에서 `POST /api/v1/reviews` 로 옮기고 삭제 (I-34) |
 
 ## 6. 기타 확인
 

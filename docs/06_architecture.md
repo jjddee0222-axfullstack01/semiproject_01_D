@@ -28,8 +28,8 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 | --- | --- | --- |
 | 화면 | Jinja2 템플릿(서버에서 HTML 생성, `backend/templates`) + JavaScript fetch + ECharts | 로그인, 폼 처리, 리뷰 목록·블라인드, CS챗봇, 통계 차트(fetch 로 `/api/v1/stats/*` 호출) |
 | 디자인 시안 | 정적 HTML (`frontend/`) | 디자이너 작업본. 서버에서는 사용하지 않고 템플릿에 반영 |
-| API 서버 | FastAPI, Pydantic v2, SQLAlchemy 2.0 | 인증·인가, 리뷰·답글·통계 API, 입력 검증. 테이블은 서버 시작 시 자동 생성 (Alembic 마이그레이션은 미사용) |
-| 데이터베이스 | MariaDB 10.5+ (utf8mb4), 임베딩은 JSON 컬럼 | 15개 테이블 (`04_database_design.md`) |
+| API 서버 | FastAPI, Pydantic v2, SQLAlchemy 2.0 | 인증·인가, 리뷰·답글·통계 API, 입력 검증. 테이블은 서버 시작 시 자동 생성 + (v1.1) Alembic 으로 변경 이력 관리 (`backend/migrations`, 7장 9) |
+| 데이터베이스 | MariaDB 10.5+ (utf8mb4), 임베딩은 JSON 컬럼 | 17개 테이블 (v1.0.0 15개 + v1.1 2개, `04_database_design.md`) |
 | 데이터·AI 파이프라인 | 규칙 기반 분석 (`analysis.py`, `rule-v2`) | 적재, 정제, 감성·위험도·이슈유형·키워드 라벨링. 감성 모델·LLM 은 `analyze_review()` 교체로 도입 예정 |
 | 실행 환경 | 로컬 (uvicorn, 프로세스 1개) / 배포: Railway 웹 서비스(uvicorn 1개) + MariaDB 11 컨테이너 | 배포 절차는 `10_deployment.md`. 시도 제한 기록이 서버 메모리에 있으므로 `--workers` 는 1 로 실행 |
 
@@ -81,6 +81,12 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 
 **위험 키워드:** 설정 화면·API 에서 추가·수정·삭제하면 그 단어가 들어간 기존 리뷰를 즉시 재분석해 반영 ('전체 리뷰 다시 분석'은 전체 재분석용)
 
+**(v1.1) 위험 리뷰 알림:** CSV 업로드 전 셀러의 마지막 리뷰 ID 기억 → 적재·분석 → 그 뒤 ID 중 위험(심각도 2 이상)·VISIBLE 리뷰를 찾아 화면에 건수 안내 → 알림을 켠 셀러면 FastAPI `BackgroundTasks` 로 **응답을 보낸 뒤** 메일 발송 (`alerts.py`). 메일 서버(`MAIL_HOST`)가 없으면 콘솔 출력, 발송 실패는 기록만 하고 업로드 결과에 영향 없음. 작성자 이름은 가려서 보냄
+
+**(v1.1) 부정 키워드 급증·리포트:** `insights.py` 한 곳에서 계산해 대시보드·API·리포트가 같은 값을 씀. 리포트는 서버가 HTML 을 만들고 인쇄용 CSS(`@media print`)로 메뉴를 숨겨 브라우저 '인쇄 → PDF로 저장'으로 파일을 만듦 (PDF 라이브러리 추가 없음)
+
+**(v1.1) 답글 템플릿:** CS챗봇·답글 추천 API → 셀러 템플릿이 있으면 자리 표시자를 `str.replace` 로 채우고(셀러가 쓴 중괄호로 오류가 나지 않게 `str.format` 미사용), 없으면 기본 초안 (`reply_drafts.seller_reply_draft`)
+
 ## 6. 기초 구조 충족 점검 (6일차 기준)
 
 | 점검 항목 | 상태 | 비고 |
@@ -105,6 +111,9 @@ MariaDB / FastAPI 기준 · 프로젝트 기초 구조 충족 여부와 주요 �
 | 6 | 분석 결과 재현성 | 반영: `review_analysis.model_version` 기록 (`rule-v2`). 규칙을 바꾸면 서버 시작 시 예전 버전 결과를 자동 재분석 (`database.reanalyze_outdated`) |
 | 7 | 인증 시도 제한을 서버에서 관리 (7일차) | 반영: 인증 코드·로그인·비밀번호 찾기 실패 기록을 쿠키가 아닌 서버 메모리에 저장 (`rate_limit.py`). 쿠키 조작·삭제로 우회 불가 |
 | 8 | 감성 3분류 (7일차) | 반영: 위험 키워드 없는 3점 리뷰를 중립(NEU)으로 분류. 긍/부정/중립 차트·상품 비교·CS챗봇에 표시 |
+| 9 | 스키마 변경 이력 관리 (v1.1) | 반영: Alembic 도입. `0001` 기준선(v1.0.0 15개)·`0002` v1.1 2개. 이미 있는 테이블은 건너뛰므로 운영 DB 에 그대로 `upgrade head` 가능. `alembic check` 로 모델과 어긋남 검사 |
+| 10 | 자동 테스트 실행 (v1.1) | 반영: GitHub Actions (`.github/workflows/tests.yml`) — push·PR 마다 SQLite 전체 테스트 + MariaDB 11 컨테이너에서 마이그레이션 확인과 전체 테스트 |
+| 11 | 중복 코드 정리 (v1.1) | 반영: 재분석 반복문을 `database.reanalyze_reviews` 하나로 합침 (키워드 변경·규칙 버전 변경·내부 분석 API 공용, 셀러별 키워드 1회 조회). 옛 `POST /api/reviews` 삭제 → `POST /api/v1/reviews` |
 
 ## 8. 미결정 사항
 

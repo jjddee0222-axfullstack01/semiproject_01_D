@@ -12,12 +12,15 @@ AI 에이전트(Claude Code 등)에게 작업을 맡길 때 이 파일을 먼저
 - 배포 완료: https://semiproject01d-production.up.railway.app — Railway 웹 서비스(Root Directory `backend`) + MariaDB 11 컨테이너. 설정값은 `docs/10_deployment.md`
 - 실제 MariaDB 전체 테스트 통과 (2026-10-21, MariaDB 11.4.3, `TEST_DATABASE_URL` 로 `pinpoint_test` 지정, I-33)
 - 남은 일: 발표, `v1.0.0` 태그
+- **v1.1 (2026-10-27, `feature/upgrade-v1.1`)**: GitHub Actions CI, Alembic, 옛 `/api/reviews` 삭제, 위험 리뷰 알림 메일(FR-28), 부정 키워드 급증(FR-29), 주간·월간 리포트 `/reports`(FR-30), 셀러 답글 템플릿(FR-31). 테이블 17개, API 41개, 테스트 379개
 - 분석은 규칙 기반(`analysis.py`, `rule-v2`). LLM·모델 학습은 이번 범위 제외
 
 ## 폴더 구조
 ```
 backend/        실제 서버 — main.py(화면 라우트) · api_v1.py(REST /api/v1) · models.py · schemas.py · analysis.py
                 pipeline.py(CSV 적재) · email_verify.py · rate_limit.py · templates/(화면) · tests/(pytest)
+                alerts.py(알림 메일) · insights.py(급증·리포트) · migrations/(Alembic)
+.github/        workflows/tests.yml (push·PR 자동 테스트: SQLite + MariaDB)
 frontend/       디자인 시안 (서버에서 사용 안 함)
 docs/           01~11 기획·설계·테스트·배포 문서
 ```
@@ -30,7 +33,8 @@ docs/           01~11 기획·설계·테스트·배포 문서
 ## 코드 위치
 - 화면 라우트 `backend/main.py` · REST API `backend/api_v1.py` (`/api/v1`)
 - 테이블 `backend/models.py` · 요청/응답 형식 `backend/schemas.py`
-- 분석 규칙 `backend/analysis.py` · 추천 답글 `backend/reply_drafts.py`
+- 분석 규칙 `backend/analysis.py` · 추천 답글·셀러 답글 템플릿 `backend/reply_drafts.py`
+- 위험 리뷰 알림 `backend/alerts.py` · 키워드 급증·리포트 `backend/insights.py`
 - 이메일 인증 코드 `backend/email_verify.py` · 시도 횟수 제한 `backend/rate_limit.py` · CSV 적재 `backend/pipeline.py`
 - 새 화면 템플릿은 `{% include '_layout_styles.html' %}` + `{% include '_sidebar.html' %}` 로 공통 스타일·모바일 메뉴 사용
 
@@ -39,6 +43,7 @@ docs/           01~11 기획·설계·테스트·배포 문서
 - 통계·키워드·CSV 등 집계는 **`status = 'VISIBLE'` 리뷰만** (블라인드 제외)
 - API 오류 응답은 `{code, message}` 형식
 - 기존 API URL·DB 구조(테이블·컬럼) 임의 변경 금지. 필요하면 먼저 사람에게 확인
+- DB 를 바꿀 때(사람 확인 후)는 `models.py` 수정 + Alembic 마이그레이션 추가 (`cd backend && python -m alembic revision --autogenerate -m "설명"`). 서버의 `create_all` 과 함께 쓰므로 새 테이블 생성은 '이미 있으면 건너뛰기'로 작성 (`migrations/versions/0002_*.py` 참고). `tests/test_migrations.py`·`test_mariadb_sql.py` 의 테이블 수도 함께 갱신
 - 새 라이브러리 설치 전 확인. `requirements.txt` 에 버전과 함께 추가
 - 비밀번호·키는 `backend/.env` 에만. 공유 파일(`setup_mariadb.sql`, `.env.example`)에 실제 값 금지
 - 화면 입력 검증은 `schemas.py` 의 규칙(비밀번호·이메일)과 DB 컬럼 크기(`main.FIELD_MAX`)를 그대로 사용. 상태를 바꾸는 동작(로그아웃 등)은 GET 이 아닌 POST 로만
@@ -52,7 +57,7 @@ cd backend
 python -m pytest            # 전체 (임시 SQLite, 실제 DB 는 건드리지 않음)
 python -m pytest -m pages   # 화면만 / -m api : API 만 / -m unit : 단위
 ```
-DB 는 `backend/models.py`(테이블 15개), API 규칙은 `docs/05_api_spec.md`, 화면은 `docs/03_ui_design.md` 참고
+DB 는 `backend/models.py`(테이블 17개, 변경 이력은 `backend/migrations/`), API 규칙은 `docs/05_api_spec.md`, 화면은 `docs/03_ui_design.md` 참고
 
 ## Agent 에게 작업을 맡길 때 (일정표 19장: Context → Task → Constraints → Done Criteria → Test)
 아래 형식으로 지시하고, 결과는 `docs/11_final_report.md` 부록 A 에 기록합니다.

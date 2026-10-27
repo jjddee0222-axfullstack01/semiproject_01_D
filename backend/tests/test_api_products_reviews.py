@@ -107,9 +107,22 @@ def test_blind_forbidden_for_other_seller(other_api, ids):
     assert r.status_code == 403
 
 
-# ── 현재 화면용 리뷰 등록 API (/api/reviews)
-def test_legacy_review_create_is_analyzed(api, ids):
-    r = api.post("/api/reviews", json={"product_id": ids["product_a"], "content": "벌레가 나왔어요", "rating": 4})
+# ── 리뷰 등록 API (v1.1: 옛 /api/reviews → /api/v1/reviews)
+def test_review_create_is_analyzed(api, ids):
+    r = api.post(f"{API}/reviews", json={"product_id": ids["product_a"], "content": "벌레가 나왔어요", "rating": 4})
     assert r.status_code == 201
     assert r.json()["severity"] == 3 and r.json()["is_risky"] is True and r.json()["issue_type"] == "PRODUCT"
-    assert api.post("/api/reviews", json={"product_id": ids["product_a"], "content": "x", "rating": 9}).status_code == 422
+    r = api.post(f"{API}/reviews", json={"product_id": ids["product_a"], "content": "x", "rating": 9})
+    assert r.status_code == 422 and error_code(r) == "VALIDATION_ERROR"
+
+
+def test_review_create_ownership(api, other_api, ids):
+    assert error_code(api.post(f"{API}/reviews", json={"product_id": 999999, "content": "x", "rating": 3})) \
+        == "PRODUCT_NOT_FOUND"
+    r = other_api.post(f"{API}/reviews", json={"product_id": ids["product_a"], "content": "x", "rating": 3})
+    assert r.status_code == 403 and error_code(r) == "FORBIDDEN"
+
+
+def test_legacy_review_api_removed(api, ids):
+    r = api.post("/api/reviews", json={"product_id": ids["product_a"], "content": "x", "rating": 3})
+    assert r.status_code in (404, 405)

@@ -20,7 +20,7 @@ def test_csv_safe(value, expected):
 
 
 def test_review_export_neutralizes_formula(page, ids):
-    page.post("/api/reviews", json={"product_id": ids["product_a"], "rating": 5,
+    page.post(f"{API}/reviews", json={"product_id": ids["product_a"], "rating": 5,
                                     "content": '=HYPERLINK("http://evil.example","클릭")'})
     body = page.get(f"{API}/exports/reviews.csv").content.decode("utf-8-sig")
     line = next(line for line in body.splitlines() if "evil.example" in line)

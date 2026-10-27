@@ -28,7 +28,7 @@
 | CS | 답글 없는 리뷰를 위험도순으로, 감성별 추천 답글 수정·복사·처리 완료 | `/cschatbot` |
 | 고도화 (Could) | 상품 비교, 대시보드 '처리할 일', 모바일 화면, REST API 문서(Swagger) | `/compare` `/docs` |
 
-**규모:** 화면 16개, REST API 34개(`/api/v1`), DB 테이블 15개, 자동 테스트 347개
+**규모:** 화면 16개, REST API 34개(`/api/v1`), DB 테이블 15개, 자동 테스트 347개 (v1.0.0 기준. 발표 후 v1.1: 화면 17개, API 41개, 테이블 17개, 테스트 379개 → 10장)
 
 ## 3. 시스템 구성
 
@@ -73,7 +73,7 @@ FastAPI 한 서버가 Jinja2 화면과 REST API(`/api/v1`)를 함께 제공하�
 | 리뷰는 CSV 업로드로만 수집 (쇼핑몰 자동 연동 없음) | 쇼핑몰 오픈 API 연동, 정기 수집 |
 | 로그인 잠금·인증 코드가 서버 메모리에 있어 재시작 시 초기화, 프로세스 1개로 운영 | Redis 등 공유 저장소로 이전 |
 | 임베딩 컬럼은 설계만 하고 사용하지 않음 | 유사 리뷰 검색, 상품 비교 고도화에 활용 |
-| 옛 API `POST /api/reviews` 가 남아 있음 | 다음 버전에서 `/api/v1` 로 통합 |
+| ~~옛 API `POST /api/reviews` 가 남아 있음~~ | v1.1 에서 `POST /api/v1/reviews` 로 통합 (I-34) |
 | 배포는 Railway 체험판(30일)이고, 메일 발송을 보장할 수 없어 이메일 인증을 끔(`EMAIL_VERIFICATION=0`) | 유료 전환 또는 리눅스 서버(`10_deployment.md` 부록 A)로 옮기고 SMTP 연결 후 인증 켜기 |
 
 ## 7. 시연 순서 (발표용, 약 5분)
@@ -107,7 +107,33 @@ FastAPI 한 서버가 Jinja2 화면과 REST API(`/api/v1`)를 함께 제공하�
 
 ---
 
-## 부록 A. Agent Task 기록 (7\~9일차)
+## 10. v1.1 고도화 (발표 후, 2026-10-27, LLM 제외)
+
+발표 피드백과 6장 '다음 단계'를 바탕으로, LLM 없이 할 수 있는 개선을 묶어 `feature/upgrade-v1.1` 브랜치에서 작업했습니다.
+
+| 구분 | 내용 | 위치 |
+|---|---|---|
+| 정리 | GitHub Actions CI (SQLite + MariaDB 11), 옛 API 삭제·`/api/v1` 통합(I-34), 재분석 중복 코드 통합(I-35), **Alembic** 마이그레이션 도입 | `.github/workflows/tests.yml`, `backend/migrations/` |
+| 위험 리뷰 알림 (FR-28) | CSV 업로드 후 새 위험 리뷰 건수 안내 + 알림을 켠 셀러에게 메일 (응답 후 백그라운드 발송, 작성자 이름 가림) | 상품 조회, 설정 '알림 설정', `alerts.py` |
+| 부정 키워드 급증 (FR-29) | 최근 7일 3건 이상 + 이전 7일보다 2배 이상 늘어난 부정 키워드 | 대시보드 카드, `GET /api/v1/stats/keyword-surges`, `insights.py` |
+| 주간·월간 리포트 (FR-30) | 핵심 지표 5개(전기간 대비), 감성·이슈·키워드·상품별·위험 리뷰, 브라우저 인쇄로 PDF 저장 | `/reports` (사이드바 '리포트') |
+| 답글 템플릿 (FR-31) | 감성별 템플릿, 자리 표시자 `{고객명}` `{쇼핑몰명}` `{상품명}` `{기본 답글}` → CS챗봇·답글 추천에 적용 | 설정 '답글 템플릿', `/api/v1/reply-templates` |
+
+DB 는 기존 테이블을 바꾸지 않고 `notification_settings`, `reply_templates` 2개만 추가했습니다 (탈퇴 시 CASCADE 삭제). 기존 DB 는 서버를 다시 켜면 새 테이블이 자동으로 생기고, 버전 기록이 필요하면 `cd backend && python -m alembic upgrade head` 를 한 번 실행합니다.
+
+## 부록 A. Agent Task 기록 (7\~9일차, v1.1)
+
+### T-11-1. v1.1 고도화 (발표 후, 2026-10-27)
+
+| 항목 | 내용 |
+|---|---|
+| Context | v1.0.0 발표 완료. 6장 '다음 단계'와 09 정적 점검의 중복 코드·옛 API, CI 없음, 스키마 변경 이력 없음 |
+| Task | LLM 을 제외한 업그레이드: CI·옛 API 정리·Alembic, 위험 리뷰 메일 알림·키워드 급증, 리포트·답글 템플릿 |
+| Constraints | 기존 테이블·컬럼 변경 금지(새 테이블만), 기존 화면·API 동작 유지, 새 라이브러리는 `alembic` 하나(사람 확인 후 `requirements.txt`), 소유권·`VISIBLE` 규칙 유지, 비밀 값 커밋 금지, `feature/upgrade-v1.1` 브랜치 |
+| Done Criteria | 1) push·PR 마다 SQLite·MariaDB 테스트 2) 옛 `/api/reviews` 삭제·`/api/v1/reviews` 제공 3) 빈 DB·기존 DB 모두 `alembic upgrade head` 4) FR-28\~31 화면·API 5) 메일 실패가 업로드에 영향 없음 6) 테스트 추가, 전체 통과 7) 문서 반영 |
+| Test | 전체 pytest 379개 통과(새 32개), `alembic check` 로 모델·마이그레이션 일치, 리포트 인쇄 미리보기(A4) 확인 |
+| 결과 (Agent 보고) | 새 파일: `alerts.py`, `insights.py`, `alembic.ini`, `migrations/`, `templates/reports.html`, `.github/workflows/tests.yml`, 테스트 3개 파일 · 변경: `models.py`(테이블 2개), `main.py`, `api_v1.py`, `schemas.py`, `reply_drafts.py`, `database.py`, `pipeline.py`, 템플릿(대시보드·설정·사이드바), `schema_mariadb.sql`, 문서 · 기존 기능 영향: 옛 `POST /api/reviews` 삭제(화면 미사용), 테이블 수 기대값 15 → 17 |
+| 사람 리뷰 | 확인자: (팀원 확인 후 기입) · PR: `feature/upgrade-v1.1` · 의견: |
 
 일정표 19장 형식(Context → Task → Constraints → Done Criteria → Test)으로 Coding Agent 에게 맡긴 작업과 사람의 확인 결과입니다. 모든 작업은 `CLAUDE.md` 의 공통 제약(기술 스택 고정, 기존 API URL·DB 구조 변경 금지, 새 라이브러리 금지, 작업 후 전체 테스트)을 함께 따랐습니다.
 
@@ -190,6 +216,7 @@ FastAPI 한 서버가 Jinja2 화면과 REST API(`/api/v1`)를 함께 제공하�
 | 10-15 | 7일차 | 11 | 리뷰 필터·상세 모달, 업로드 이력·탈퇴 완료 화면, 위험 키워드 즉시 반영, 중립 분류·보안 강화, `07\~11` 문서, 2차 점검 수정 |
 | 10-16 | 8일차 | 10 | 피드백 문구 수정, Agent Task T-8-1(CSV 입력 검증·상태 확인 API), 일정표 기준 문서 보완(01\~11), 팀원 문서 다듬기 |
 | 10-19 | 9일차 | 1 (+ 이번 수정) | 배포 문서 정리, 9일차 통합 점검 수정 I-26\~I-30 |
+| 10-27 | 발표 후 | `feature/upgrade-v1.1` | v1.1 고도화 (CI·Alembic·알림·급증·리포트·답글 템플릿, 10장) |
 
 ## 부록 C. Git 운영 점검 (일정표 18장)
 
